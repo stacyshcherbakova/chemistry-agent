@@ -35,7 +35,7 @@ examples: list[ProblemState] = [
     ProblemState(
         task="molar_mass",
         params={"formula": "H2O"},
-        expected="18.015",
+        expected="18.015 g/mol",
     ),
 
     # 4. Compute moles from mass + formula

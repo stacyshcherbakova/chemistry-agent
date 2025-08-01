@@ -53,7 +53,6 @@ def normalize_unit(unit: str) -> str:
     """
     return UNIT_ALIASES.get(unit.lower().strip(), unit.strip())
 
-
 # def convert_units(value: float, from_unit: str, to_unit: str) -> str:
 #     """
 #     Convert a quantity from one unit to another using Pint.
