@@ -1,21 +1,21 @@
 from typing import Any, Dict, Literal, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class ProblemState(BaseModel):
     prompt: Optional[str] = None
-    task: Literal[
-        # "convert_units",
-        "molar_mass",
-        "compute_moles",
-        "mass_from_moles",
-        "mix_concentration",
-        "dilution",
-    ]
+    task:     Optional[Literal[
+                  "molar_mass",
+                  "compute_moles",
+                  "mass_from_moles",
+                  "mix_concentration",
+                  "dilution",
+              ]] = Field(
+                  default=None,
+                  description="(optional) which tool to start with"
+              )
     params: Dict[str, Any]
     expected: str 
     
-# Example problems covering each registered tool
-# Example problems covering each registered tool
 examples: list[ProblemState] = [
     # # 1. Unit conversion: mass
     # ProblemState(

@@ -2,56 +2,26 @@ import re
 import pint
 import periodictable as pt
 from typing import Any, Dict, Literal, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class ProblemState(BaseModel):
     prompt: Optional[str] = None
-    task: Literal[
-        # "convert_units",
-        "molar_mass",
-        "compute_moles",
-        "mass_from_moles",
-        "mix_concentration",
-        "dilution",
-    ]
+    task:     Optional[Literal[
+                  "molar_mass",
+                  "compute_moles",
+                  "mass_from_moles",
+                  "mix_concentration",
+                  "dilution",
+              ]] = Field(
+                  default=None,
+                  description="(optional) which tool to start with"
+              )
     params: Dict[str, Any]
     expected: str 
-
-# Unit registry for convert_units
+    
 eem = pint.UnitRegistry() 
 ureg = pint.UnitRegistry()
 
-# Aliases for common units
-UNIT_ALIASES = {
-    "minutes": "min",
-    "minute": "min",
-    "mins": "min",
-    "hours": "hour",
-    "hrs": "hour",
-    "grams": "g",
-    "liters": "L",
-    "litres": "L",
-    "milliliters": "mL",
-    "millilitres": "mL",
-    "celsius": "degC",
-    "°c": "degC",
-    "fahrenheit": "degF",
-    "°f": "degF",
-    "kelvin": "kelvin",
-    "k": "kelvin",
-}
-
-def normalize_unit(unit: str) -> str:
-    """
-    Normalize common unit aliases to Pint-compatible unit strings.
-
-    Args:
-        unit (str): The unit string to normalize.
-
-    Returns:
-        str: Normalized unit string.
-    """
-    return UNIT_ALIASES.get(unit.lower().strip(), unit.strip())
 
 # def convert_units(value: float, from_unit: str, to_unit: str) -> str:
 #     """
@@ -217,3 +187,12 @@ def build_prompt(p: ProblemState) -> str:
             f"If you have {pr['initial_conc']} M at {pr['initial_vol']} L, "
             f"how much volume is needed to get {pr['final_conc']} M?"
         )
+
+TOOLS  = {
+#   "convert_units":    convert_units,
+  "molar_mass":         lookup_molar_mass,
+  "compute_moles":      compute_moles,
+  "mass_from_moles":    mass_from_moles,
+  "mix_concentration":  mix_concentration,
+  "dilution": dilution,
+}
