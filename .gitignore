@@ -3,3 +3,5 @@ __pycache__
 simple_science_agent.ipynb
 generate_names.ipynb
 unit_conversion.ipynb
+helper/units.py
+guided_chemistry_agent.ipynb

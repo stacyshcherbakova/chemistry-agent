@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class ProblemState(BaseModel):
     prompt: Optional[str] = None
     task: Literal[
-        "convert_units",
+        # "convert_units",
         "molar_mass",
         "compute_moles",
         "mass_from_moles",
@@ -54,40 +54,48 @@ def normalize_unit(unit: str) -> str:
     return UNIT_ALIASES.get(unit.lower().strip(), unit.strip())
 
 
-def convert_units(value: float, from_unit: str, to_unit: str) -> str:
-    """
-    Convert a quantity from one unit to another using Pint.
+# def convert_units(value: float, from_unit: str, to_unit: str) -> str:
+#     """
+#     Convert a quantity from one unit to another using Pint.
 
-    Args:
-        value (float): Numeric value to convert.
-        from_unit (str): Source unit (e.g., 'g', 'degC').
-        to_unit (str): Target unit (e.g., 'kg', 'degF').
+#     Args:
+#         value (float): Numeric value to convert.
+#         from_unit (str): Source unit (e.g., 'g', 'degC').
+#         to_unit (str): Target unit (e.g., 'kg', 'degF').
 
-    Returns:
-        str: Converted value with units (e.g., '0.100 kg').
-    """
-    fu = normalize_unit(from_unit)
-    tu = normalize_unit(to_unit)
+#     Returns:
+#         str: Converted value with units (e.g., '0.100 kg').
+#     """
+#     fu = normalize_unit(from_unit)
+#     tu = normalize_unit(to_unit)
 
-    # Explicit handling for temperature offsets
-    if fu == "degC" and tu == "degF":
-        return f"{(value * 9/5 + 32):.3f} °F"
-    if fu == "degF" and tu == "degC":
-        return f"{((value - 32) * 5/9):.3f} °C"
-    if fu == "degC" and tu == "kelvin":
-        return f"{(value + 273.15):.3f} K"
-    if fu == "kelvin" and tu == "degC":
-        return f"{(value - 273.15):.3f} °C"
-    if fu == "degF" and tu == "kelvin":
-        c = (value - 32) * 5/9
-        return f"{(c + 273.15):.3f} K"
-    if fu == "kelvin" and tu == "degF":
-        c = value - 273.15
-        return f"{(c * 9/5 + 32):.3f} °F"
+#     temp_units = {"degf", "°f", "fahrenheit", "degc", "°c", "celsius", "k", "kelvin"}
+#     # Explicit handling for temperature offsets
+#     if fu in temp_units and tu in temp_units:
+#         # 1) convert ANY input into Celsius numeric
+#         if fu in ("degf", "°f", "fahrenheit"):
+#             c = (value - 32) * 5/9
+#         elif fu in ("k", "kelvin"):
+#             c = value - 273.15
+#         else:  # degC/°C/celsius
+#             c = value
 
-    qty = value * ureg(fu)
-    res = qty.to(tu)
-    return f"{res.magnitude:.3f} {res.units}"
+#         # 2) convert Celsius numeric into target
+#         if tu in ("degf", "°f", "fahrenheit"):
+#             out = c * 9/5 + 32
+#             unit_str = "°F"
+#         elif tu in ("k", "kelvin"):
+#             out = c + 273.15
+#             unit_str = "K"
+#         else:  # degC/°C/celsius
+#             out = c
+#             unit_str = "°C"
+
+#         return f"{out:.3f} {unit_str}"
+
+#     qty = value * ureg(fu)
+#     res = qty.to(tu)
+#     return f"{res.magnitude:.3f} {res.units}"
 
 
 def lookup_molar_mass(formula: str) -> float:

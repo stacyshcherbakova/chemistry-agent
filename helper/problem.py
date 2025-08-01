@@ -4,7 +4,7 @@ from pydantic import BaseModel
 class ProblemState(BaseModel):
     prompt: Optional[str] = None
     task: Literal[
-        "convert_units",
+        # "convert_units",
         "molar_mass",
         "compute_moles",
         "mass_from_moles",
@@ -17,19 +17,19 @@ class ProblemState(BaseModel):
 # Example problems covering each registered tool
 # Example problems covering each registered tool
 examples: list[ProblemState] = [
-    # 1. Unit conversion: mass
-    ProblemState(
-        task="convert_units",
-        params={"value": 1500, "from_unit": "mg", "to_unit": "g"},
-        expected="1.500 gram",
-    ),
+    # # 1. Unit conversion: mass
+    # ProblemState(
+    #     task="convert_units",
+    #     params={"value": 1500, "from_unit": "mg", "to_unit": "g"},
+    #     expected="1.500 gram",
+    # ),
 
-    # 2. Unit conversion: temperature
-    ProblemState(
-        task="convert_units",
-        params={"value": 32, "from_unit": "degF", "to_unit": "degC"},
-        expected="0.000 °C",
-    ),
+    # # 2. Unit conversion: temperature
+    # ProblemState(
+    #     task="convert_units",
+    #     params={"value": 32, "from_unit": "degF", "to_unit": "degC"},
+    #     expected="0.000 °C",
+    # ),
 
     # 3. Molar mass lookup
     ProblemState(
