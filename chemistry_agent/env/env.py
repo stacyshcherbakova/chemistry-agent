@@ -1,6 +1,5 @@
 from aviary.core import Environment, Message, Tool, ToolRequestMessage,ToolResponseMessage
-from helper.tools import *
-
+from chemistry_agent.helper.tools import *
 
 # --- Step 1: Science (more like chemistry) Environment -> ---
 class ChemistryEnv(Environment[ProblemState]):

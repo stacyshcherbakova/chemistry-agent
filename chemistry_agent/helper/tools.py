@@ -2,82 +2,13 @@ import re
 import pint
 import math
 import periodictable as pt
-from typing import Any, Dict, Literal, Optional
-from pydantic import BaseModel, Field
-
-class ProblemState(BaseModel):
-    prompt: Optional[str] = None
-    task:     Optional[Literal[
-                  "molar_mass",
-                  "compute_moles",
-                  "mass_from_moles",
-                  "mix_concentration",
-                  "dilution",
-                  "percent_yield",
-                  "energy_change",
-                  "pH_from_H",
-                  "calculate_density",
-                  "empirical_formula",
-                  "titration",
-                  "concentration_from_moles",
-                  "mass_from_density",
-                  "calc"
-                  
-              ]] = Field(
-                  default=None,
-                  description="(optional) which tool to start with"
-              )
-    params: Dict[str, Any]
-    expected: str 
+from typing import Dict
+from ..problem_state.problem_state import ProblemState
 
 eem = pint.UnitRegistry() 
 ureg = pint.UnitRegistry()
 
-
-# def convert_units(value: float, from_unit: str, to_unit: str) -> str:
-#     """
-#     Convert a quantity from one unit to another using Pint.
-
-#     Args:
-#         value (float): Numeric value to convert.
-#         from_unit (str): Source unit (e.g., 'g', 'degC').
-#         to_unit (str): Target unit (e.g., 'kg', 'degF').
-
-#     Returns:
-#         str: Converted value with units (e.g., '0.100 kg').
-#     """
-#     fu = normalize_unit(from_unit)
-#     tu = normalize_unit(to_unit)
-
-#     temp_units = {"degf", "°f", "fahrenheit", "degc", "°c", "celsius", "k", "kelvin"}
-#     # Explicit handling for temperature offsets
-#     if fu in temp_units and tu in temp_units:
-#         # 1) convert ANY input into Celsius numeric
-#         if fu in ("degf", "°f", "fahrenheit"):
-#             c = (value - 32) * 5/9
-#         elif fu in ("k", "kelvin"):
-#             c = value - 273.15
-#         else:  # degC/°C/celsius
-#             c = value
-
-#         # 2) convert Celsius numeric into target
-#         if tu in ("degf", "°f", "fahrenheit"):
-#             out = c * 9/5 + 32
-#             unit_str = "°F"
-#         elif tu in ("k", "kelvin"):
-#             out = c + 273.15
-#             unit_str = "K"
-#         else:  # degC/°C/celsius
-#             out = c
-#             unit_str = "°C"
-
-#         return f"{out:.3f} {unit_str}"
-
-#     qty = value * ureg(fu)
-#     res = qty.to(tu)
-#     return f"{res.magnitude:.3f} {res.units}"
-
-
+# --- Tools used by chemistry agent ---
 def lookup_molar_mass(formula: str) -> float:
     """
     Look up the molar mass of a chemical formula using periodictable.
@@ -228,7 +159,7 @@ def calculate_density(mass_g: float, volume_cm3: float) -> str:
     if volume_cm3 == 0:
         return "Undefined (volume is zero)"
     rho_g_cm3 = mass_g / volume_cm3
-    rho_kg_m3 = rho_g_cm3 * 1000
+    # rho_kg_m3 = rho_g_cm3 * 1000
     return f"{rho_g_cm3:.2f} g/cm³"
 
 
@@ -449,9 +380,8 @@ def build_prompt(p: ProblemState) -> str:
     raise ValueError(f"Unrecognized task: {t!r}")
 
 
-
+# --- TOOLS dictionary declaration ---
 TOOLS  = {
-#   "convert_units":    convert_units,
     "molar_mass": lookup_molar_mass,
     "compute_moles": compute_moles,
     "mass_from_moles": mass_from_moles,
