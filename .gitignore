@@ -1,7 +1,8 @@
-venv
+.venv
 __pycache__
 simple_science_agent.ipynb
 guided_chemistry_agent copy 2.ipynb
 generate_names.ipynb
 unit_conversion.ipynb
 helper/units.py
+simple_chemistry_agent.ipynb
