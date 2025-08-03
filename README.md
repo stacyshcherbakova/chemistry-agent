@@ -122,7 +122,7 @@ By the end, the agent could:
 
 ### Cost
 
-I set a budget of **£10** (≈\$13 USD), since I’d never used OpenAI API calls before. In total, I spent about **£1.73**.
+I set a budget of **£10** (≈$13 USD), since I’d never used OpenAI API calls before. In total, I spent about **≈£2.14** ($2.84 USD).
 
 ![Cost breakdown chart](assets/costs.png)
 
