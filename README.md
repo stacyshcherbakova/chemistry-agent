@@ -2,8 +2,7 @@
 
 ## About
 A simple chemistry agent that can answer simple GCSE level questions (not perfectly, perphaps...)
-Developed using FutureHouse [Aviary](https://futurehouse.gitbook.io/futurehouse-cookbook/aviary) and [LDP](https://futurehouse.gitbook.io/futurehouse-cookbook/ldp-language-decision-processes) frameworks (which unfortunately do not have the best documentation at the moment..!).
-
+Developed using FutureHouse [Aviary](https://futurehouse.gitbook.io/futurehouse-cookbook/aviary) and [LDP](https://futurehouse.gitbook.io/futurehouse-cookbook/ldp-language-decision-processes) frameworks.
 ## Setup
 
 1. **Clone the repository**
@@ -52,24 +51,39 @@ The `GuidedAgent` uses a declarative computation graph (`@compute_graph`) to man
 
 ## How to Run a Single Problem
 
-### In a Python script
-```python
-from chemistry_agent.run_agent.run_agent import ProblemState, solve_problem
-import asyncio
+Make sure to activate your virtual environment before running the script, or select it as your kernel in the notebook!
 
-if __name__ == "__main__":
-    # Example problem
-    problem = ProblemState(
-        task="molar_mass",
-        params={"formula": "H2O"},
-        expected="18.02 g/mol",
-    )
-    asyncio.run(solve_problem(problem))
+### In a Python script (can be found in `test_run.py`)
+```python
+import os
+from chemistry_agent.problem_state.problem_state import ProblemState
+from chemistry_agent.run_agent.run_agent import solve_problem
+from chemistry_agent.agent.agent import GuidedAgent
+from chemistry_agent.env.env import ChemistryEnv
+import asyncio
+os.environ["OPENAI_API_KEY"] = ""
+
+agent = GuidedAgent()
+
+problem = ProblemState(
+   task="molar_mass",
+   params={"formula": "H2O"},
+   expected="18.02 g/mol",
+)
+env = ChemistryEnv(problem)
+asyncio.run(solve_problem(problem=problem, env=env, agent=agent))
 ```
 
 ### In a Jupyter notebook
 ```python
-from chemistry_agent.run_agent.run_agent import ProblemState, solve_problem
+import os
+from chemistry_agent.problem_state.problem_state import ProblemState
+from chemistry_agent.run_agent.run_agent import solve_problem
+from chemistry_agent.agent.agent import GuidedAgent
+from chemistry_agent.env.env import ChemistryEnv
+os.environ["OPENAI_API_KEY"] = ""
+
+agent = GuidedAgent()
 
 problem = ProblemState(
     task="molar_mass",
@@ -77,11 +91,12 @@ problem = ProblemState(
     expected="18.02 g/mol",
 )
 
-await solve_problem(problem)
+env = ChemistryEnv(problem)
+await solve_problem(problem=problem, env=env, agent=agent)
 ```
 
 ### Example problems
-Example problems can be found under helper/problems. The agent does not fully answer more complicated questions, and there is some inconsistency in comparing agent's and expected answer. Please cut me some slack as this is work in progress...
+Example problems can be found under helper/problems. The agent does not fully answer more complicated questions, and there is some inconsistency in comparing agent's and expected answer (UPD: I have run created a `run_debug.py` to debug the expected output vs tools output). Please cut me some slack as this is work in progress...
 
 ## Personal reflection on this Mini-Project
 
@@ -107,16 +122,18 @@ The frameworks had limited documentation and few real-world examples, which made
 ### Game Plan
 
 1. **Define a deterministic problem.** After playing around with generating arbitrary text (names for people, fruit, etc.), I realised I needed a clear validation mechanism. Deterministic outputs would make testing and debugging simpler.
-2. **Build a unit-conversion tool.** This worked, but general unit conversion proved too broad—there are endless units and edge cases.
+2. **Build a unit-conversion tool.** This worked, but general unit conversion proved too broad, there are endless units and edge cases...
 3. **Focus on chemistry.** I remembered that Future House offers a chemistry model called **Phoenix**, and GCSE-level chemistry questions (molarity, density, etc.) map neatly to well-defined calculations.
 4. **Implement tool selection.** I created a chemistry agent that chose the right tool for simple questions. It struggled with multi-step problems because it lacked context memory.
-5. **Add memory with Agent State.** Following the LDP tutorial, I used `computer_graph` and an **Agent State** store to accumulate previous messages and reasoning steps. This was the hardest part to debug—running the agent repeatedly ate into my budget—but it was essential for chaining tool calls.
+5. **Add memory with Agent State.** Following the LDP tutorial, I used `computer_graph` and an **Agent State** store to accumulate previous messages and reasoning steps. This was the hardest part to debug.. running the agent repeatedly ate into my budget, but it was essential for chaining tool calls.
 6. **Expand calculation capabilities.** The agent still stumbled on basic arithmetic when solving multi-step questions. To fix this, I added a generic expression-evaluation tool to the chemistry environment.
 
 By the end, the agent could:
 - Correctly select chemistry-specific tools
 - Maintain a reasoning chain across calls
 - Evaluate arbitrary calculations as needed
+
+Which is pretty cool!!!!
 
 ---
 
@@ -130,14 +147,19 @@ I set a budget of **£10** (≈$13 USD), since I’d never used OpenAI API calls
 
 ### What Could Be Improved
 
-- **Structured reasoning steps.** Adopt a more formal plan-and-execute loop to guide the agent’s logic.
-- **Richer toolset.** Provide domain-specific tools for thermodynamics, equilibrium calculations, etc., to broaden the agent’s capabilities.
-- **Robust logging.** The logging now is extremely ugly although better "standard" than print statements.
-- **Enhanced memory.** 
-- **Enhanced rewards (for intermediate steps).** 
-- **Exceeded Callbacks Bug.** Cannot fix this bug to save my life! :
-   -  LiteLLM:WARNING: logging_callback_manager.py:130 - Cannot add callback - would exceed MAX_CALLBACKS limit of 30. Current callbacks: 30
-   -  LiteLLM WARNING: Cannot add callback - would exceed MAX_CALLBACKS limit of 30. Current callbacks: 30
-
----
+- **Structured reasoning steps.** Adopt a more formal plan-and-execute loop to guide the agent’s logic. Not sure how yet..
+- **Richer toolset.** Provide domain-specific tools for thermodynamics, equilibrium calculations, etc. to broaden the agent’s capabilities!
+- **Change logging.** 
+   - **Concern:**  
+      The current logs are “ugly”. Standard print statements provide more useful information.
+   - **Next steps:**    
+      Create a more robust logging experience!
+- **Enhanced rewards (for intermediate steps).** Coudl provide useful in guiding the model if the step taken was correct.
+- **“Exceeded Callbacks” bug.**  
+  - **Error:**  
+    ```  
+    LiteLLM WARNING: Cannot add callback – would exceed MAX_CALLBACKS limit of 30 (current: 30)  
+    ```  
+  - **Next steps:**  
+    Pool or deregister callbacks after use, or raise the `MAX_CALLBACKS` threshold in config.
 

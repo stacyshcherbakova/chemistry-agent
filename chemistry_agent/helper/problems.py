@@ -36,7 +36,7 @@ examples: list[ProblemState] = [
         task="percent_yield",
         prompt="In a reaction, you actually obtained 8.4 g of product, but the theoretical maximum was 10.0 g. What is the percentage yield?",
         params={"actual_g": 8.4, "theoretical_g": 10.0},
-        expected="84.0 %"
+        expected="84.00 %"
     ),
 
     ProblemState(
