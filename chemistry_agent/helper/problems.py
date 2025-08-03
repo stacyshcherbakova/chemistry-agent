@@ -131,7 +131,7 @@ examples: list[ProblemState] = [
             "stoich": {"Ag+": 1, "Cl-": 1, "AgCl": 1},
             "actual_product_mol": 0.025
         },
-        expected="125 %"
+        expected="125.00 %"
     ),
 
     ProblemState(

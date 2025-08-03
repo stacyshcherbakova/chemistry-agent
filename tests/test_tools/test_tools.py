@@ -1,4 +1,3 @@
-# tests/test_tools.py
 import pytest
 from chemistry_agent.helper.tools import (
     lookup_molar_mass, compute_moles, mass_from_moles, mix_concentration,

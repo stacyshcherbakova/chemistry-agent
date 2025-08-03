@@ -150,7 +150,7 @@ class TestToolsVsExpectedResults:
         except Exception as e:
             print(f"Error: {e}")
     
-    def test_parameter_name_consistency(self):
+    def test_formatting_patternstest_formatting_patterns(self):
         """Check for parameter name mismatches between examples and tools"""
         print("\n=== PARAMETER NAME CONSISTENCY CHECK ===")
         
