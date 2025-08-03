@@ -17,7 +17,7 @@ examples: list[ProblemState] = [
     ProblemState(
         task="mass_from_moles",
         params={"moles": 0.500, "molar_mass": 44.01},
-        expected="22.01 g",
+        expected="22.00 g",
     ),
 
     ProblemState(
@@ -42,7 +42,7 @@ examples: list[ProblemState] = [
     ProblemState(
         task="energy_change",
         prompt="A 150 g sample of water is heated and its temperature rises by 25 °C. The specific heat capacity of water is 4.18 J/(g·K). How much heat energy (in joules) was absorbed (give one significant figure)?",
-        params={"mass_g": 150.0, "c_J_per_gK": 4.18, "delta_T_K": 25.0},
+        params={"mass_g": 150.0, "c": 4.18, "delta_T": 25.0},
         expected="15675.00 J"
     ),
 

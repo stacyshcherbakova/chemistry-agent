@@ -57,10 +57,10 @@ def mass_from_moles(moles: float, molar_mass: float) -> str:
         molar_mass (float): Molar mass in g/mol.
 
     Returns:
-        str: Mass formatted as 'X.XXX g'.
+        str: Mass formatted as 'X.XX g'.
     """
     mass = moles * molar_mass
-    return f"{mass:.2f} g"
+    return f"{round(mass, 2):.2f} g"
 
 
 def mix_concentration(C1: float, V1: float, C2: float, V2: float) -> str:
@@ -109,7 +109,7 @@ def percent_yield(actual_g: float, theoretical_g: float) -> str:
     if theoretical_g == 0:
         return "Undefined (theoretical mass is zero)"
     pct = (actual_g / theoretical_g) * 100
-    return f"{pct:.1f} %"
+    return f"{pct:.2f} %"
 
 
 def energy_change(mass_g: float, c: float, delta_T: float) -> str:
@@ -122,10 +122,10 @@ def energy_change(mass_g: float, c: float, delta_T: float) -> str:
         delta_T (float): Change in temperature (in K, equivalent to °C difference).
 
     Returns:
-        str: Heat energy change formatted as 'X.XXX J'.
+        str: Heat energy change formatted as 'X.XX J'.
     """
     q = mass_g * c * delta_T
-    return f"{q:.1f} J"
+    return f"{q:.2f} J"
 
 
 def pH_from_H(H_conc: float) -> str:
@@ -141,7 +141,7 @@ def pH_from_H(H_conc: float) -> str:
     if H_conc <= 0:
         return "Undefined (non-positive [H+])"
     pH = -math.log10(H_conc)
-    return f"{pH:.2f} pH"
+    return f"{pH:.2f}"
 
 
 def calculate_density(mass_g: float, volume_cm3: float) -> str:
