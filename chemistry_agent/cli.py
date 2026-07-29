@@ -47,8 +47,28 @@ class LevelChoice(str, Enum):
 # --------------------------------------------------------------------------- #
 
 
+def _load_dotenv() -> None:
+    """Load a local .env into the environment, if one exists.
+
+    Only the CLI does this — importing the library must never read files or
+    mutate the environment as a side effect. Real environment variables always
+    win over .env values.
+    """
+    try:
+        from dotenv import find_dotenv, load_dotenv
+    except ImportError:  # pragma: no cover - optional convenience
+        return
+    # usecwd=True searches the working directory and its parents; the default
+    # searches upward from this module's own path, which finds nothing useful
+    # for an installed package.
+    path = find_dotenv(usecwd=True)
+    if path:
+        load_dotenv(path, override=False)
+
+
 def _require_api_key() -> None:
     """Exit early with a clear message if no Anthropic credentials are set."""
+    _load_dotenv()
     if "ANTHROPIC_API_KEY" not in os.environ and "ANTHROPIC_AUTH_TOKEN" not in os.environ:
         console.print(
             "[bold red]Set ANTHROPIC_API_KEY to run the solver.[/bold red]"

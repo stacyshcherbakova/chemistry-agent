@@ -1,6 +1,7 @@
 """CLI tests — stubbed Orchestrator and evals modules, no SDK or network."""
 
 import json
+import os
 
 import pytest
 from typer.testing import CliRunner
@@ -96,6 +97,22 @@ class TestSolve:
             cli.app, ["solve", "p"], env={"ANTHROPIC_AUTH_TOKEN": "oauth"}
         )
         assert result.exit_code == 0
+
+    def test_dotenv_supplies_key_when_env_is_empty(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+        (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=from-dotenv\n")
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(cli.app, ["solve", "p"])
+        assert result.exit_code == 0
+        assert os.environ["ANTHROPIC_API_KEY"] == "from-dotenv"
+
+    def test_real_env_var_beats_dotenv(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "from-shell")
+        (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=from-dotenv\n")
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(cli.app, ["solve", "p"])
+        assert os.environ["ANTHROPIC_API_KEY"] == "from-shell"
 
     def test_show_work_includes_reasoning_and_tools(self):
         result = runner.invoke(

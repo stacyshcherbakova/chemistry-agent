@@ -1,5 +1,10 @@
 .venv
 __pycache__
+.env
+.env.*
+!.env.example
+eval_*.json
+.pytest_cache
 simple_science_agent.ipynb
 guided_chemistry_agent copy 2.ipynb
 generate_names.ipynb
