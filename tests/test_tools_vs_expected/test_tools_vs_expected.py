@@ -97,10 +97,16 @@ class TestToolsVsExpectedResults:
         
         elif example.task == "titration":
             # This one is more complex - titration_end_point function
+            if "vol1_L" in params:
+                # Normalized params match the tool signature directly
+                return tool_func(
+                    params["vol1_L"], params["conc1"],
+                    params["vol2_L"], params["conc2"]
+                )
             return tool_func(
-                params["Va_mL"] / 1000,  # Convert mL to L
-                params.get("Ma", 0),     # If Ma is None, use 0 to solve for it
-                params["Vb_mL"] / 1000,  # Convert mL to L  
+                params["Va_mL"] / 1000,      # Convert mL to L
+                params.get("Ma") or 0,       # If Ma is None/missing, use 0 to solve for it
+                params["Vb_mL"] / 1000,      # Convert mL to L
                 params["Mb"]
             )
         

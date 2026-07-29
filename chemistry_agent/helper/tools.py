@@ -1,15 +1,13 @@
 import re
-import pint
+import ast
 import math
 import periodictable as pt
 from typing import Dict
 from ..problem_state.problem_state import ProblemState
 
-eem = pint.UnitRegistry() 
-ureg = pint.UnitRegistry()
 
 # --- Tools used by chemistry agent ---
-def lookup_molar_mass(formula: str) -> float:
+def lookup_molar_mass(formula: str) -> str:
     """
     Look up the molar mass of a chemical formula using periodictable.
 
@@ -17,13 +15,18 @@ def lookup_molar_mass(formula: str) -> float:
         formula (str): Chemical formula (e.g., 'NaCl', 'H2O').
 
     Returns:
-        float: Molar mass in g/mol.
+        str: Molar mass formatted as 'X.XX g/mol'.
     """
-    tokens = re.findall(r"([A-Z][a-z]?)(\d*)", formula)
+    # Delegate to the recursive parser so grouped formulas such as Ca(OH)2 and
+    # Al2(SO4)3 are counted correctly; a flat regex silently drops the
+    # multiplier that follows a closing parenthesis.
+    from ..toolkit.reactions import _parse_formula
+
     total = 0.0
-    for elem, count in tokens:
-        n = int(count) if count else 1
-        atom = getattr(pt, elem)
+    for elem, n in _parse_formula(formula).items():
+        atom = getattr(pt, elem, None)
+        if atom is None:
+            raise ValueError(f"Unknown element: {elem}")
         total += atom.mass * n
     return f"{total:.2f} g/mol"
 
@@ -191,10 +194,14 @@ def empirical_formula(percentages: Dict[str, float]) -> str:
     min_m = min(moles.values())
     ratios = {e: v / min_m for e, v in moles.items()}
 
-    # find integer multiplier
+    # find integer multiplier (tolerance accommodates experimental percentages)
     for mult in range(1, 7):
-        if all(abs(r * mult - round(r * mult)) < 1e-6 for r in ratios.values()):
+        if all(abs(r * mult - round(r * mult)) < 1e-2 * mult for r in ratios.values()):
             break
+    else:
+        raise ValueError(
+            f"No whole-number ratio within a factor of 6 fits {percentages!r}"
+        )
 
     # build formula string
     parts = []
@@ -232,7 +239,7 @@ def titration_end_point(vol1_L: float, conc1: float, vol2_L: float, conc2: float
         V2 = conc1 * vol1_L / conc2
         return f"{V2:.2f} L"
 
-def concentration_from_moles(moles: float, volume_L: float) -> float:
+def concentration_from_moles(moles: float, volume_L: float) -> str:
     """
     Calculate the concentration (molarity) of a solution given the amount of substance and volume.
 
@@ -241,12 +248,12 @@ def concentration_from_moles(moles: float, volume_L: float) -> float:
         volume_L (float): Total solution volume in liters.
 
     Returns:
-        float: Concentration in mol/L.
+        str: Concentration formatted as 'X mol/L'.
     """
     return f"{moles / volume_L} mol/L"
 
 
-def mass_from_density(density_g_per_L: float, volume_L: float) -> float:
+def mass_from_density(density_g_per_L: float, volume_L: float) -> str:
     """
     Calculate the mass of a substance given its density and volume.
 
@@ -255,14 +262,34 @@ def mass_from_density(density_g_per_L: float, volume_L: float) -> float:
         volume_L (float): Volume in liters.
 
     Returns:
-        float: Mass in grams.
+        str: Mass formatted as 'X g'.
     """
     return f"{density_g_per_L * volume_L} g"
 
 
+_CALC_ALLOWED_NODES = (
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Constant,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.Pow,
+    ast.Mod,
+    ast.FloorDiv,
+    ast.USub,
+    ast.UAdd,
+)
+
+
 def calc(expression: str = None, Expression: str = None) -> float:
     """
-    Evaluate a simple arithmetic expression and return the result.
+    Safely evaluate a simple arithmetic expression and return the result.
+
+    Only numeric literals, +, -, *, /, **, %, //, unary +/- and parentheses
+    are allowed. Names, function calls, attribute access, etc. are rejected.
 
     Args:
         expression (str, optional): A string containing a numeric expression (e.g., "0.1132 / 0.5").
@@ -270,12 +297,54 @@ def calc(expression: str = None, Expression: str = None) -> float:
 
     Returns:
         float: The evaluated result of the expression.
+
+    Raises:
+        ValueError: If no expression is given or it contains disallowed syntax.
     """
     expr = expression or Expression
     if expr is None:
         raise ValueError("calc() requires an 'expression' argument")
-    # Warning: using eval; ensure expression is safe/trusted
-    return eval(expr)
+
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Invalid arithmetic expression: {expr!r}") from exc
+
+    for node in ast.walk(tree):
+        if not isinstance(node, _CALC_ALLOWED_NODES):
+            raise ValueError(
+                f"Disallowed syntax in expression: {type(node).__name__}"
+            )
+        if isinstance(node, ast.Constant) and not isinstance(node.value, (int, float)):
+            raise ValueError(f"Disallowed constant in expression: {node.value!r}")
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.UnaryOp):
+            operand = _eval(node.operand)
+            return -operand if isinstance(node.op, ast.USub) else +operand
+        if isinstance(node, ast.BinOp):
+            left, right = _eval(node.left), _eval(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            if isinstance(node.op, ast.Pow):
+                return left ** right
+            if isinstance(node.op, ast.Mod):
+                return left % right
+            if isinstance(node.op, ast.FloorDiv):
+                return left // right
+        raise ValueError(f"Disallowed syntax in expression: {type(node).__name__}")
+
+    return float(_eval(tree))
 
 
 def build_prompt(p: ProblemState) -> str:
@@ -284,7 +353,6 @@ def build_prompt(p: ProblemState) -> str:
     """
     t  = p.task
     pr = p.params
-    print(f"[DEBUG build_prompt] task={t!r}, params={pr}")
 
     if t == "convert_units":
         return f"Convert {pr['value']} {pr['from_unit']} to {pr['to_unit']}."

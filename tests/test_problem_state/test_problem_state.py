@@ -50,17 +50,44 @@ class TestProblemStateCreation:
         )
         assert problem.task == task
     
-    def test_invalid_task_type(self):
-        """Test that invalid task types are rejected"""
+    def test_arbitrary_task_string_accepted(self):
+        """task is now Optional[str]: arbitrary tool names are accepted"""
+        problem = ProblemState(
+            task="any_future_tool",
+            params={"formula": "H2O"},
+            expected="18.02 g/mol"
+        )
+        assert problem.task == "any_future_tool"
+
+    def test_level_topic_tolerance_defaults(self):
+        """New metadata fields default sensibly"""
+        problem = ProblemState(
+            params={"formula": "H2O"},
+            expected="18.02 g/mol"
+        )
+        assert problem.level == "gcse"
+        assert problem.topic == "general"
+        assert problem.tolerance == 0.01
+
+    @pytest.mark.parametrize("level", ["gcse", "alevel", "university"])
+    def test_valid_levels(self, level):
+        """All difficulty tiers are accepted"""
+        problem = ProblemState(
+            level=level,
+            params={},
+            expected="x"
+        )
+        assert problem.level == level
+
+    def test_invalid_level_rejected(self):
+        """level remains a strict Literal"""
         with pytest.raises(ValidationError) as exc_info:
             ProblemState(
-                task="invalid_task",
-                params={"formula": "H2O"},
-                expected="18.02 g/mol"
+                level="phd",
+                params={},
+                expected="x"
             )
-        
-        # Check that the error mentions the invalid task
-        assert "invalid_task" in str(exc_info.value)
+        assert "level" in str(exc_info.value)
     
     def test_missing_required_params(self):
         """Test that missing required 'params' field raises error"""

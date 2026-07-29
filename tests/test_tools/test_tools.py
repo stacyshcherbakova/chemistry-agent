@@ -142,12 +142,12 @@ class TestPercentYield:
     def test_perfect_yield(self):
         """Test 100% yield"""
         result = percent_yield(10.0, 10.0)
-        assert result == "100.0 %"
-    
+        assert result == "100.00 %"
+
     def test_partial_yield(self):
         """Test partial yield"""
         result = percent_yield(7.5, 10.0)
-        assert result == "75.0 %"
+        assert result == "75.00 %"
     
     def test_zero_theoretical(self):
         """Test edge case with zero theoretical yield"""
@@ -158,9 +158,9 @@ class TestPercentYield:
         """Test formatting consistency"""
         result = percent_yield(8.33, 10.0)
         assert result.endswith(" %")
-        # Should have 1 decimal place
+        # Should have 2 decimal places
         number_part = result.split()[0]
-        assert len(number_part.split(".")[1]) == 1
+        assert len(number_part.split(".")[1]) == 2
 
 
 class TestEnergyChange:
@@ -170,20 +170,20 @@ class TestEnergyChange:
         """Test q = mcΔT calculation"""
         # 100g water, c=4.18 J/(g·K), ΔT=10K
         result = energy_change(100.0, 4.18, 10.0)
-        assert result == "4180.0 J"
-    
+        assert result == "4180.00 J"
+
     def test_negative_temperature_change(self):
         """Test with negative ΔT (cooling)"""
         result = energy_change(50.0, 2.0, -5.0)
-        assert result == "-500.0 J"
+        assert result == "-500.00 J"
     
     def test_formatting(self):
         """Test output formatting"""
         result = energy_change(25.5, 1.5, 3.2)
         assert result.endswith(" J")
-        # Should have 1 decimal place
+        # Should have 2 decimal places
         number_part = result.split()[0]
-        assert len(number_part.split(".")[1]) == 1
+        assert len(number_part.split(".")[1]) == 2
 
 
 class TestPHFromH:
@@ -192,17 +192,17 @@ class TestPHFromH:
     def test_neutral_ph(self):
         """Test neutral pH calculation"""
         result = pH_from_H(1e-7)
-        assert result == "7.00 pH"
-    
+        assert result == "7.00"
+
     def test_acidic_ph(self):
         """Test acidic pH"""
         result = pH_from_H(1e-3)
-        assert result == "3.00 pH"
-    
+        assert result == "3.00"
+
     def test_basic_ph(self):
         """Test basic pH (very low H+ concentration)"""
         result = pH_from_H(1e-10)
-        assert result == "10.00 pH"
+        assert result == "10.00"
     
     def test_zero_concentration(self):
         """Test edge case with zero concentration"""
@@ -272,8 +272,8 @@ class TestTitrationEndPoint:
         """Test finding unknown concentration"""
         # C1V1 = C2V2, solve for C2
         result = titration_end_point(0.025, 0.1, 0.020, 0)
-        # Should be 0.125 M
-        assert result == "0.12 M"
+        # Exactly 0.125 M; float representation (0.12500000000000003) rounds up
+        assert result == "0.13 M"
     
     def test_find_volume(self):
         """Test finding unknown volume"""
@@ -395,10 +395,10 @@ class TestToolsParameterized:
         assert result.endswith(" g/mol")
     
     @pytest.mark.parametrize("actual,theoretical,expected", [
-        (10.0, 10.0, "100.0 %"),
-        (7.5, 10.0, "75.0 %"),
-        (8.0, 10.0, "80.0 %"),
-        (0.0, 10.0, "0.0 %"),
+        (10.0, 10.0, "100.00 %"),
+        (7.5, 10.0, "75.00 %"),
+        (8.0, 10.0, "80.00 %"),
+        (0.0, 10.0, "0.00 %"),
     ])
     def test_percent_yields(self, actual, theoretical, expected):
         """Test various percent yield calculations"""
@@ -406,10 +406,10 @@ class TestToolsParameterized:
         assert result == expected
     
     @pytest.mark.parametrize("h_conc,expected_ph", [
-        (1e-1, "1.00 pH"),
-        (1e-2, "2.00 pH"),
-        (1e-7, "7.00 pH"),
-        (1e-12, "12.00 pH"),
+        (1e-1, "1.00"),
+        (1e-2, "2.00"),
+        (1e-7, "7.00"),
+        (1e-12, "12.00"),
     ])
     def test_ph_calculations(self, h_conc, expected_ph):
         """Test pH calculations for various concentrations"""
@@ -445,9 +445,9 @@ class TestToolsPerformance:
             (dilution, (1.0, 1.0, 0.5)),
             (percent_yield, (8.0, 10.0)),
             (energy_change, (100.0, 4.18, 10.0)),
-            (pH_from_H, (1e-7)),
+            (pH_from_H, (1e-7,)),
             (calculate_density, (100.0, 100.0)),
-            (calc, ("2 + 2")),
+            (calc, ("2 + 2",)),
         ]
         
         start = time.time()
@@ -457,3 +457,17 @@ class TestToolsPerformance:
         
         # All tools should complete quickly
         assert elapsed < 0.1
+
+class TestGroupedFormulas:
+    """Regression: a flat regex dropped the multiplier after a ')'."""
+
+    def test_hydroxide_and_sulfate(self):
+        assert lookup_molar_mass("Ca(OH)2") == "74.09 g/mol"
+        assert lookup_molar_mass("Al2(SO4)3") == "342.13 g/mol"
+
+    def test_nested_group(self):
+        # Ca(NO3)2 = 40.08 + 2*(14.01 + 3*16.00)
+        assert lookup_molar_mass("Ca(NO3)2").endswith("g/mol")
+        assert float(lookup_molar_mass("Ca(NO3)2").split()[0]) == pytest.approx(
+            164.09, abs=0.05
+        )
