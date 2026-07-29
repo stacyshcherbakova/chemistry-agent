@@ -132,3 +132,17 @@ class TestUnitAliases:
         assert UNIT_ALIASES["cm³"] == "cm**3"
         assert UNIT_ALIASES["g mol⁻¹"] == "g/mol"
         assert UNIT_ALIASES["°C"] == "degC"
+
+
+class TestPrefixSymbols:
+    """Regression: the symbol was stripped, so any two bare numbers matched."""
+
+    def test_different_symbols_do_not_match(self):
+        assert answers_match("pH = 2.00", "Kc = 2.00") is False
+        assert answers_match("E = 1.10 V", "Kp = 1.10 V") is False
+
+    def test_same_symbol_still_matches(self):
+        assert answers_match("pH = 2.87", "pH = 2.87") is True
+
+    def test_bare_number_matches_prefixed(self):
+        assert answers_match("pH = 2.87", "2.87") is True

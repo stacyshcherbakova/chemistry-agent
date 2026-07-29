@@ -17,7 +17,10 @@ PRICING: dict[str, tuple[float, float]] = {
 LEVEL_EFFORT: dict[str, str] = {
     "gcse": "medium",
     "alevel": "high",
-    "university": "xhigh",
+    # "xhigh" wants a much larger max_tokens than the SDK allows on a
+    # non-streaming request (it refuses above ~32k), and thinking shares
+    # that budget — so university runs at "high" until the solver streams.
+    "university": "high",
 }
 
 
@@ -45,7 +48,14 @@ class AgentConfig(BaseModel):
         return LEVEL_EFFORT.get(level, "high")
 
     def price_for(self, model: str) -> tuple[float, float]:
-        return PRICING.get(model, PRICING[DEFAULT_MODEL])
+        try:
+            return PRICING[model]
+        except KeyError:
+            # Silently falling back to Opus pricing would corrupt exactly
+            # the cross-model cost comparison `chem compare` exists for.
+            raise KeyError(
+                f"No pricing for {model!r}; add it to PRICING in config.py"
+            ) from None
 
 
 def cost_usd(model: str, usage_totals, config: AgentConfig | None = None) -> float:

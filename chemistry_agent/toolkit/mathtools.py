@@ -37,6 +37,8 @@ _UNICODE_MAP = {
     "·": "*",
     "⋅": "*",
     "−": "-",
+    "⁻": "-",
+    "⁺": "+",
 }
 
 
@@ -47,7 +49,9 @@ def _normalize_unit(unit: str) -> str:
     ``'dm³'`` / ``'dm3'`` parse as ``'dm**3'``.
     """
     ascii_unit = "".join(_UNICODE_MAP.get(char, char) for char in unit)
-    return re.sub(r"([A-Za-z])(\d+)", r"\1**\2", ascii_unit)
+    # The sign must be captured too: 'mol dm-3' and 'g mol⁻¹' are the standard
+    # chemistry spellings, and dropping the minus silently inverts the unit.
+    return re.sub(r"([A-Za-z])\^?(-?\d+)", r"\1**\2", ascii_unit)
 
 
 def convert_units(value: float, from_unit: str, to_unit: str) -> str:

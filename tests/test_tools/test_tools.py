@@ -457,3 +457,17 @@ class TestToolsPerformance:
         
         # All tools should complete quickly
         assert elapsed < 0.1
+
+class TestGroupedFormulas:
+    """Regression: a flat regex dropped the multiplier after a ')'."""
+
+    def test_hydroxide_and_sulfate(self):
+        assert lookup_molar_mass("Ca(OH)2") == "74.09 g/mol"
+        assert lookup_molar_mass("Al2(SO4)3") == "342.13 g/mol"
+
+    def test_nested_group(self):
+        # Ca(NO3)2 = 40.08 + 2*(14.01 + 3*16.00)
+        assert lookup_molar_mass("Ca(NO3)2").endswith("g/mol")
+        assert float(lookup_molar_mass("Ca(NO3)2").split()[0]) == pytest.approx(
+            164.09, abs=0.05
+        )

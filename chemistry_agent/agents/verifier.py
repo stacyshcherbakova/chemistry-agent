@@ -94,7 +94,13 @@ class Verifier:
         response = self.client.messages.parse(
             model=self.config.verifier_model,
             max_tokens=self.config.verifier_max_tokens,
-            system=VERIFIER_SYSTEM,
+            system=[
+                {
+                    "type": "text",
+                    "text": VERIFIER_SYSTEM,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[
                 {
                     "role": "user",
@@ -107,6 +113,10 @@ class Verifier:
 
         self.usage.add(response.usage)
 
+        if response.stop_reason == "max_tokens":
+            raise VerifierError(
+                "Verifier response was truncated by max_tokens"
+            )
         if response.stop_reason == "refusal":
             raise VerifierError("Verifier request was refused (stop_reason=refusal)")
 

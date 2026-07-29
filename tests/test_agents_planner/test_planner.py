@@ -101,7 +101,7 @@ class TestParseCallShape:
         kwargs = client.messages.parse.call_args.kwargs
         assert kwargs["model"] == config.planner_model
         assert kwargs["max_tokens"] == config.planner_max_tokens
-        assert kwargs["system"] == PLANNER_SYSTEM
+        assert kwargs["system"][0]["text"] == PLANNER_SYSTEM
         assert kwargs["output_format"] is Plan
         assert kwargs["output_config"] == {"effort": "high"}
         assert kwargs["messages"] == [
@@ -123,7 +123,10 @@ class TestParseCallShape:
 
         planner.plan("Balance the equation H2 + O2 -> H2O")
 
-        assert client.messages.parse.call_args.kwargs["system"] == PLANNER_SYSTEM
+        assert (
+            client.messages.parse.call_args.kwargs["system"][0]["text"]
+            == PLANNER_SYSTEM
+        )
 
 
 class TestLevelHint:
@@ -147,7 +150,7 @@ class TestLevelHint:
         kwargs = client.messages.parse.call_args.kwargs
         # Identity check: the exact module constant is passed, not a copy or
         # a hint-augmented variant.
-        assert kwargs["system"] is PLANNER_SYSTEM
+        assert kwargs["system"][0]["text"] is PLANNER_SYSTEM
 
     def test_no_level_hint_sends_prompt_verbatim(self, client, planner):
         client.messages.parse.return_value = make_response(plan=make_plan())

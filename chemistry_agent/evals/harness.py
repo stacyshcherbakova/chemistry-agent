@@ -144,7 +144,11 @@ def run_benchmark(
             )
             total_cost += outcome.cost_usd
             for usage in outcome.usage.values():
-                total_in += usage.input_tokens
+                total_in += (
+                    usage.input_tokens
+                    + usage.cache_read_input_tokens
+                    + usage.cache_creation_input_tokens
+                )
                 total_out += usage.output_tokens
         except Exception as exc:  # one bad problem must not kill the run
             result = ProblemResult(

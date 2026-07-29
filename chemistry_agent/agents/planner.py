@@ -62,9 +62,9 @@ Your plan must:
 Available tools, grouped by domain:
 
 Stoichiometry & solutions (core):
-  molar_mass, compute_moles, mass_from_moles, mix_concentration, dilution,
+  lookup_molar_mass, compute_moles, mass_from_moles, mix_concentration, dilution,
   percent_yield, energy_change, pH_from_H, calculate_density,
-  empirical_formula, titration, concentration_from_moles, mass_from_density
+  empirical_formula, titration_end_point, concentration_from_moles, mass_from_density
 
 Gases:
   ideal_gas, gas_volume_rtp, combined_gas_law, partial_pressures
@@ -137,7 +137,13 @@ class Planner:
         response = self.client.messages.parse(
             model=self.config.planner_model,
             max_tokens=self.config.planner_max_tokens,
-            system=PLANNER_SYSTEM,
+            system=[
+                {
+                    "type": "text",
+                    "text": PLANNER_SYSTEM,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_message}],
             output_format=Plan,
             output_config={"effort": "high"},
@@ -145,6 +151,10 @@ class Planner:
 
         self.usage.add(response.usage)
 
+        if response.stop_reason == "max_tokens":
+            raise PlannerError(
+                "Planner response was truncated by max_tokens"
+            )
         if response.stop_reason == "refusal":
             raise PlannerError("Planner request was refused by the model")
         if response.parsed_output is None:

@@ -172,6 +172,12 @@ def _looks_like_equation(s: str) -> bool:
     return any(marker in s for marker in _EQUATION_MARKERS)
 
 
+def _prefix_symbol(text: str) -> str | None:
+    """Return the leading '<symbol> =' name, e.g. 'pH' in 'pH = 2.87'."""
+    m = _PREFIX_RE.match(text)
+    return m.group(0).split("=")[0].strip() if m else None
+
+
 def answers_match(candidate: str, expected: str, rel_tol: float = 0.01) -> bool:
     """True if ``candidate`` and ``expected`` denote the same answer.
 
@@ -192,6 +198,12 @@ def answers_match(candidate: str, expected: str, rel_tol: float = 0.01) -> bool:
     # stoichiometric coefficient would parse as the "value")
     if _looks_like_equation(nc) or _looks_like_equation(ne):
         return _formulas_match(nc, ne)
+
+    # a symbol prefix is part of the claim: pH 2.00 and Kc 2.00 are not
+    # the same answer, even though both reduce to the bare number 2.00
+    cand_sym, exp_sym = _prefix_symbol(nc), _prefix_symbol(ne)
+    if cand_sym and exp_sym and cand_sym.lower() != exp_sym.lower():
+        return False
 
     # b. numeric path
     try:

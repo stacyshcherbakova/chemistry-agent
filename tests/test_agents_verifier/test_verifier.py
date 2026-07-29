@@ -74,7 +74,8 @@ def test_verify_returns_verdict_and_calls_parse_once():
     client.messages.parse.assert_called_once()
     kwargs = client.messages.parse.call_args.kwargs
     assert kwargs["output_format"] is Verdict
-    assert kwargs["system"] == VERIFIER_SYSTEM
+    assert kwargs["system"][0]["text"] == VERIFIER_SYSTEM
+    assert kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert kwargs["model"] == AgentConfig().verifier_model
     assert kwargs["max_tokens"] == AgentConfig().verifier_max_tokens
     assert kwargs["output_config"] == {"effort": "high"}

@@ -57,7 +57,7 @@ examples: list[ProblemState] = [
 
     ProblemState(
         task="energy_change",
-        prompt="A 150 g sample of water is heated and its temperature rises by 25 °C. The specific heat capacity of water is 4.18 J/(g·K). How much heat energy (in joules) was absorbed (give one significant figure)?",
+        prompt="A 150 g sample of water is heated and its temperature rises by 25 °C. The specific heat capacity of water is 4.18 J/(g·K). How much heat energy (in joules) was absorbed?",
         level="gcse",
         topic="energetics",
         params={"mass_g": 150.0, "c": 4.18, "delta_T": 25.0},
@@ -75,7 +75,7 @@ examples: list[ProblemState] = [
 
     ProblemState(
         task="calculate_density",
-        prompt="A metal block has a mass of 245 g and a volume of 30 cm³. What is its density in g/cm³ (2 significant figures)?",
+        prompt="A metal block has a mass of 245 g and a volume of 30 cm³. What is its density in g/cm³?",
         level="gcse",
         topic="general",
         params={"mass_g": 245.0, "volume_cm3": 30.0},
@@ -127,7 +127,7 @@ examples: list[ProblemState] = [
             "solution_volume_L": 0.500,
             "target_M": 0.050
         },
-        expected="2.27 L"
+        expected="2.26 L"
     ),
 
     ProblemState(

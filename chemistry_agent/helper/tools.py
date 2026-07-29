@@ -17,11 +17,16 @@ def lookup_molar_mass(formula: str) -> str:
     Returns:
         str: Molar mass formatted as 'X.XX g/mol'.
     """
-    tokens = re.findall(r"([A-Z][a-z]?)(\d*)", formula)
+    # Delegate to the recursive parser so grouped formulas such as Ca(OH)2 and
+    # Al2(SO4)3 are counted correctly; a flat regex silently drops the
+    # multiplier that follows a closing parenthesis.
+    from ..toolkit.reactions import _parse_formula
+
     total = 0.0
-    for elem, count in tokens:
-        n = int(count) if count else 1
-        atom = getattr(pt, elem)
+    for elem, n in _parse_formula(formula).items():
+        atom = getattr(pt, elem, None)
+        if atom is None:
+            raise ValueError(f"Unknown element: {elem}")
         total += atom.mass * n
     return f"{total:.2f} g/mol"
 
@@ -193,6 +198,10 @@ def empirical_formula(percentages: Dict[str, float]) -> str:
     for mult in range(1, 7):
         if all(abs(r * mult - round(r * mult)) < 1e-2 * mult for r in ratios.values()):
             break
+    else:
+        raise ValueError(
+            f"No whole-number ratio within a factor of 6 fits {percentages!r}"
+        )
 
     # build formula string
     parts = []
@@ -344,7 +353,6 @@ def build_prompt(p: ProblemState) -> str:
     """
     t  = p.task
     pr = p.params
-    print(f"[DEBUG build_prompt] task={t!r}, params={pr}")
 
     if t == "convert_units":
         return f"Convert {pr['value']} {pr['from_unit']} to {pr['to_unit']}."

@@ -39,6 +39,11 @@ if TYPE_CHECKING:  # pragma: no cover - import only for type checkers
     import anthropic
 
 
+# Bound the agentic loop: a model that never calls submit_answer would
+# otherwise iterate until the API stops it.
+MAX_TOOL_ITERATIONS = 25
+
+
 class SolverError(RuntimeError):
     """Raised when the solver cannot produce a FinalAnswer (refusal or no answer)."""
 
@@ -303,6 +308,10 @@ class Solver:
             system=SOLVER_SYSTEM,
             tools=[*ALL_TOOLS, submit_answer],
             messages=messages,
+            # The system prompt and tool list are byte-stable across attempts,
+            # so the whole prefix (~39 tool schemas) is cacheable.
+            cache_control={"type": "ephemeral"},
+            max_iterations=MAX_TOOL_ITERATIONS,
         )
 
         tool_call_names: list[str] = []
@@ -317,6 +326,12 @@ class Solver:
                         on_tool_call(block.name)
             if message.stop_reason == "refusal":
                 raise SolverError("Solver request was refused by the model")
+            if message.stop_reason == "max_tokens":
+                raise SolverError(
+                    "Solver hit max_tokens before finishing; thinking and text "
+                    f"share the {config.solver_max_tokens}-token budget. "
+                    "Raise solver_max_tokens or lower the effort level."
+                )
 
         submission = _SUBMISSION.get()
         if submission is not None:

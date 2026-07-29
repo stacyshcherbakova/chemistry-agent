@@ -311,3 +311,15 @@ class TestCalc:
             calc("abs(-1)")
         with pytest.raises(ValueError):
             calc("'a' + 'b'")
+
+
+class TestSuperscriptMinusUnits:
+    """Regression: superscript minus was dropped, so pint raised TypeError."""
+
+    def test_concentration_notations(self):
+        assert convert_units(1.0, "mol dm\u207b\u00b3", "M").startswith("1")
+        assert convert_units(1.0, "mol dm-3", "M").startswith("1")
+
+    def test_molar_mass_and_rate_notations(self):
+        assert convert_units(1000.0, "g mol\u207b\u00b9", "kg/mol").startswith("1")
+        assert convert_units(60.0, "s\u207b\u00b9", "1/min").startswith("3600")
