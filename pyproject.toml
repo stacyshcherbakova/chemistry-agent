@@ -1,23 +1,28 @@
 [project]
 name = "chemistry-agent"
-version = "0.1.0"
-description = "Simpe GCSE level chemistry agent which can solve simple chemitry problems"
+version = "0.2.0"
+description = "A multi-agent chemistry problem solver (GCSE through intro-university) built on Claude"
 authors = [
     {name = "Stacy Shcherbakova",email = "stacyshcherbakova@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fhaviary (>=0.22.1,<0.23.0)",
-    "ldp @ git+https://github.com/Future-House/ldp.git",
+    "anthropic (>=0.70,<1.0)",
     "pydantic (>=2.11.7,<3.0.0)",
     "periodictable (>=2.0.2,<3.0.0)",
     "pint (>=0.24.4,<0.25.0)",
-    "ipykernel (>=6.30.0,<7.0.0)",
-    "pytest (>=8.4.1,<9.0.0)",
-    "pytest-asyncio (>=1.1.0,<2.0.0)"
+    "sympy (>=1.13,<2.0)",
+    "typer (>=0.12,<1.0)",
+    "rich (>=13.7,<15.0)"
 ]
 
+[project.scripts]
+chem = "chemistry_agent.cli:app"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.4.1,<9.0.0"
+ipykernel = ">=6.30.0,<7.0.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
