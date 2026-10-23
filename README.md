@@ -289,6 +289,10 @@ total, I spent about **≈£2.14** ($2.84 USD).
 
 ![Cost breakdown chart](assets/costs.png)
 
+*OpenAI usage for the original version, July–August 2025. The Claude rebuild is
+costed per problem in [Results](#results); building and evaluating it, including
+every eval run in this README, came to roughly $20.*
+
 #### What Could Be Improved
 
 - **Structured reasoning steps.** Adopt a more formal plan-and-execute loop.
