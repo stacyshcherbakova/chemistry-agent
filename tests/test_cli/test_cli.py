@@ -83,7 +83,11 @@ class TestSolve:
         assert result.exit_code == 1
         assert "boom" in result.output
 
-    def test_missing_api_key_blocks_before_constructing_orchestrator(self, monkeypatch):
+    def test_missing_api_key_blocks_before_constructing_orchestrator(
+        self, monkeypatch, tmp_path
+    ):
+        # run outside the repo so a developer's local .env cannot supply a key
+        monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
         result = runner.invoke(cli.app, ["solve", "p"])
@@ -226,6 +230,50 @@ class TestEval:
         assert saved["path"] == str(out)
         assert "1/1" in result.output  # progress callback rendered
 
+    def test_bank_and_no_verifier_forwarded(self, monkeypatch, tmp_path):
+        captured = {}
+
+        def fake_run_benchmark(factory, **kwargs):
+            captured.update(kwargs)
+            return _fake_report()
+
+        monkeypatch.setattr(
+            "chemistry_agent.evals.harness.run_benchmark", fake_run_benchmark
+        )
+        monkeypatch.setattr(
+            "chemistry_agent.evals.report.render", lambda r, console=None: None
+        )
+        monkeypatch.setattr(
+            "chemistry_agent.evals.report.save_json", lambda r, p: None
+        )
+        result = runner.invoke(
+            cli.app,
+            ["eval", "--bank", "hard", "--no-verifier", "--json-out", str(tmp_path / "r.json")],
+            env=ENV,
+        )
+        assert result.exit_code == 0, result.output
+        assert captured["bank"] == "hard"
+        assert captured["config"].use_verifier is False
+
+    def test_verifier_on_and_standard_bank_by_default(self, monkeypatch, tmp_path):
+        captured = {}
+        monkeypatch.setattr(
+            "chemistry_agent.evals.harness.run_benchmark",
+            lambda factory, **kw: captured.update(kw) or _fake_report(),
+        )
+        monkeypatch.setattr(
+            "chemistry_agent.evals.report.render", lambda r, console=None: None
+        )
+        monkeypatch.setattr(
+            "chemistry_agent.evals.report.save_json", lambda r, p: None
+        )
+        result = runner.invoke(
+            cli.app, ["eval", "--json-out", str(tmp_path / "r.json")], env=ENV
+        )
+        assert result.exit_code == 0, result.output
+        assert captured["bank"] == "standard"
+        assert captured["config"].use_verifier is True
+
     def test_default_json_path_uses_label(self, monkeypatch, tmp_path):
         saved = {}
         monkeypatch.setattr(
@@ -244,7 +292,9 @@ class TestEval:
         assert result.exit_code == 0
         assert saved["path"] == "eval_baseline.json"
 
-    def test_requires_api_key(self, monkeypatch):
+    def test_requires_api_key(self, monkeypatch, tmp_path):
+        # run outside the repo so a developer's local .env cannot supply a key
+        monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
         result = runner.invoke(cli.app, ["eval"])

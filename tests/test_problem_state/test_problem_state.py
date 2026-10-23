@@ -67,7 +67,7 @@ class TestProblemStateCreation:
         )
         assert problem.level == "gcse"
         assert problem.topic == "general"
-        assert problem.tolerance == 0.01
+        assert problem.tolerance is None  # precision-aware scoring by default
 
     @pytest.mark.parametrize("level", ["gcse", "alevel", "university"])
     def test_valid_levels(self, level):

@@ -160,7 +160,22 @@ class TestSubmitAnswerCapture:
     def test_call_records_submission_in_contextvar(self):
         result = submit_answer.call(SUBMISSION_INPUT)
         assert result == "Answer recorded. You may stop."
-        assert _SUBMISSION.get() == SUBMISSION_INPUT
+        assert _SUBMISSION.get() == {**SUBMISSION_INPUT, "insufficient_data": False}
+
+    def test_insufficient_data_flag_recorded(self):
+        submit_answer.func(
+            value=0,
+            units="",
+            formatted_answer="Cannot be answered: the volume of solution is not given.",
+            reasoning_summary="Concentration needs a volume.",
+            insufficient_data=True,
+        )
+        submission = _SUBMISSION.get()
+        assert submission["insufficient_data"] is True
+
+    def test_system_prompt_forbids_inventing_data(self):
+        assert "insufficient_data=true" in SOLVER_SYSTEM
+        assert "Never invent data" in SOLVER_SYSTEM
 
     def test_underlying_function_records_submission(self):
         submit_answer.func(

@@ -283,13 +283,23 @@ _CALC_ALLOWED_NODES = (
     ast.UAdd,
 )
 
+# Single-argument functions calc accepts, e.g. "-log10(1.8e-5)".
+_CALC_FUNCTIONS = {
+    "log10": math.log10,
+    "ln": math.log,
+    "exp": math.exp,
+    "sqrt": math.sqrt,
+}
+
 
 def calc(expression: str = None, Expression: str = None) -> float:
     """
     Safely evaluate a simple arithmetic expression and return the result.
 
-    Only numeric literals, +, -, *, /, **, %, //, unary +/- and parentheses
-    are allowed. Names, function calls, attribute access, etc. are rejected.
+    Only numeric literals, +, -, *, /, **, %, //, unary +/-, parentheses and
+    the single-argument functions log10, ln, exp and sqrt are allowed. Other
+    names, function calls, attribute access, etc. are rejected. Arithmetic is
+    done in floats, so huge powers fail fast instead of hanging.
 
     Args:
         expression (str, optional): A string containing a numeric expression (e.g., "0.1132 / 0.5").
@@ -310,7 +320,25 @@ def calc(expression: str = None, Expression: str = None) -> float:
     except SyntaxError as exc:
         raise ValueError(f"Invalid arithmetic expression: {expr!r}") from exc
 
+    function_names = set()
     for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if (
+                not isinstance(node.func, ast.Name)
+                or node.func.id not in _CALC_FUNCTIONS
+                or len(node.args) != 1
+                or node.keywords
+            ):
+                raise ValueError(
+                    "Disallowed function call; only log10(x), ln(x), exp(x) "
+                    "and sqrt(x) are allowed"
+                )
+            function_names.add(id(node.func))
+            continue
+        if isinstance(node, (ast.Name, ast.Load)) and (
+            isinstance(node, ast.Load) or id(node) in function_names
+        ):
+            continue
         if not isinstance(node, _CALC_ALLOWED_NODES):
             raise ValueError(
                 f"Disallowed syntax in expression: {type(node).__name__}"
@@ -322,7 +350,10 @@ def calc(expression: str = None, Expression: str = None) -> float:
         if isinstance(node, ast.Expression):
             return _eval(node.body)
         if isinstance(node, ast.Constant):
-            return node.value
+            # Floats only: int ** int would build arbitrarily large integers.
+            return float(node.value)
+        if isinstance(node, ast.Call):
+            return _CALC_FUNCTIONS[node.func.id](_eval(node.args[0]))
         if isinstance(node, ast.UnaryOp):
             operand = _eval(node.operand)
             return -operand if isinstance(node.op, ast.USub) else +operand

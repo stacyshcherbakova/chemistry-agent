@@ -33,6 +33,14 @@ Work through this checklist:
    made? Missing calculation steps mean the answer was not properly derived.
 5. FORMAT & SIG FIGS: Is the formatted answer sane — sensible significant
    figures, units present when required, consistent with the numeric value?
+6. ANSWERABILITY: If the solver flagged insufficient_data, check the claim:
+   approve only if the problem really is missing a needed quantity, contains
+   contradictory values, or describes something physically impossible. Reject
+   if it is answerable from the given data plus standard constants. Conversely,
+   if the solver gave a number but had to assume a value the problem never
+   gave, or ignored a contradiction, reject and say so. If the answer text
+   says the problem cannot be solved but insufficient_data is false, reject
+   and tell the solver to resubmit with insufficient_data=true.
 
 Approve (approved=true) only when the answer is defensible on every check.
 When rejecting, list the specific problems in `issues` and write
@@ -69,7 +77,8 @@ def _render_user_message(
         f"Value: {answer.value}\n"
         f"Units: {answer.units}\n"
         f"Formatted answer: {answer.formatted_answer}\n"
-        f"Reasoning summary: {answer.reasoning_summary}\n\n"
+        f"Reasoning summary: {answer.reasoning_summary}\n"
+        f"Insufficient data claimed: {answer.insufficient_data}\n\n"
         "## Tool calls made (in order)\n"
         f"{calls}\n"
     )

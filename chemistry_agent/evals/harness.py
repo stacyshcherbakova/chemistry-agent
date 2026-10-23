@@ -10,6 +10,9 @@ agents accumulate ``usage`` across calls, so a fresh team per problem keeps
 per-problem cost/token accounting honest.
 """
 
+import math
+import statistics
+import time
 from typing import Callable, Optional
 
 from pydantic import BaseModel, Field
@@ -26,6 +29,9 @@ class ProblemResult(BaseModel):
     prompt: str
     expected: str
     got: Optional[str]
+    got_value: Optional[float] = None
+    got_units: Optional[str] = None
+    got_insufficient_data: bool = False
     correct: bool
     level: str
     topic: str
@@ -34,6 +40,14 @@ class ProblemResult(BaseModel):
     cost_usd: float
     tool_calls: list[str]
     error: Optional[str] = None
+    seconds: Optional[float] = Field(
+        default=None, description="Wall-clock time for the whole solve"
+    )
+
+    @property
+    def errored(self) -> bool:
+        """No answer was produced because something failed, not a wrong answer."""
+        return self.got is None and self.error is not None
 
 
 class EvalReport(BaseModel):
@@ -41,9 +55,16 @@ class EvalReport(BaseModel):
 
     label: str
     solver_model: str
+    use_verifier: bool = True
+    bank: str = "standard"
     n_problems: int
     n_correct: int
     accuracy: float
+    n_errors: int = Field(
+        default=0,
+        description="Problems with no answer because a call failed (network, API). "
+        "Counted in n_problems but they say nothing about the agent: re-run them.",
+    )
     per_level: dict[str, dict[str, int]] = Field(
         default_factory=dict,
         description='{"gcse": {"correct": 3, "total": 5}, ...}',
@@ -54,6 +75,8 @@ class EvalReport(BaseModel):
     total_output_tokens: int
     tool_histogram: dict[str, int] = Field(default_factory=dict)
     mean_attempts: float
+    latency_p50_s: Optional[float] = None
+    latency_p95_s: Optional[float] = None
     results: list[ProblemResult] = Field(default_factory=list)
 
 
@@ -64,7 +87,43 @@ def _bump(breakdown: dict[str, dict[str, int]], key: str, correct: bool) -> None
         bucket["correct"] += 1
 
 
-def _score(answer, expected: str, tolerance: float) -> bool:
+# Expected value for problems that cannot be answered as written. Only an
+# answer flagged ``insufficient_data`` is correct for them; a flagged answer
+# on any other problem is wrong.
+INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+
+BANKS = ("standard", "hard", "all")
+
+
+def load_bank(name: str = "standard") -> list[ProblemState]:
+    """Return a problem bank by name: ``standard``, ``hard`` or ``all``."""
+    if name not in BANKS:
+        raise ValueError(f"unknown bank {name!r}; choose from {', '.join(BANKS)}")
+    if name == "standard":
+        return list(examples)
+    from ..helper.problems_hard import hard_examples
+
+    return list(hard_examples) if name == "hard" else [*examples, *hard_examples]
+
+
+def _percentile(values: list[float], pct: float) -> Optional[float]:
+    """Nearest-rank percentile; None for an empty list."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    rank = max(1, math.ceil(pct / 100 * len(ordered)))
+    return round(ordered[rank - 1], 2)
+
+
+def _latency(results: list["ProblemResult"]) -> dict[str, Optional[float]]:
+    secs = [r.seconds for r in results if r.seconds is not None and not r.errored]
+    return {
+        "latency_p50_s": round(statistics.median(secs), 2) if secs else None,
+        "latency_p95_s": _percentile(secs, 95),
+    }
+
+
+def _score(answer, expected: str, tolerance: Optional[float]) -> bool:
     """Score a submitted answer against the expected one.
 
     Correct if either the human-readable ``formatted_answer`` or the solver's
@@ -73,6 +132,11 @@ def _score(answer, expected: str, tolerance: float) -> bool:
     model sometimes adds to the formatted string ("≈0.17 M (0.025 mol / 0.15 L)").
     """
     if answer is None:
+        return False
+    flagged = bool(getattr(answer, "insufficient_data", False))
+    if expected == INSUFFICIENT_DATA:
+        return flagged
+    if flagged:
         return False
     if answers_match(answer.formatted_answer, expected, rel_tol=tolerance):
         return True
@@ -90,6 +154,7 @@ def run_benchmark(
     levels: Optional[list[str]] = None,
     config: Optional[AgentConfig] = None,
     on_progress: Optional[Callable[[int, int, ProblemResult], None]] = None,
+    bank: str = "standard",
 ) -> EvalReport:
     """Run every selected problem through a fresh orchestrator and score it.
 
@@ -118,7 +183,7 @@ def run_benchmark(
 
     cfg = config or AgentConfig()
 
-    pool = list(problems) if problems is not None else list(examples)
+    pool = list(problems) if problems is not None else load_bank(bank)
     if levels is not None:
         wanted = set(levels)
         pool = [p for p in pool if p.level in wanted]
@@ -139,7 +204,9 @@ def run_benchmark(
         try:
             if not problem.prompt:
                 prompt = build_prompt(problem)
+            started = time.perf_counter()
             outcome = orchestrator_factory().solve(prompt, level_hint=problem.level)
+            seconds = round(time.perf_counter() - started, 2)
 
             got = outcome.answer.formatted_answer if outcome.answer else None
             correct = _score(outcome.answer, problem.expected, problem.tolerance)
@@ -147,6 +214,11 @@ def run_benchmark(
                 prompt=prompt,
                 expected=problem.expected,
                 got=got,
+                got_value=outcome.answer.value if outcome.answer else None,
+                got_units=outcome.answer.units if outcome.answer else None,
+                got_insufficient_data=bool(
+                    outcome.answer and outcome.answer.insufficient_data
+                ),
                 correct=correct,
                 level=problem.level,
                 topic=problem.topic,
@@ -155,6 +227,7 @@ def run_benchmark(
                 cost_usd=outcome.cost_usd,
                 tool_calls=list(outcome.tool_calls),
                 error=outcome.error,
+                seconds=seconds,
             )
             total_cost += outcome.cost_usd
             for usage in outcome.usage.values():
@@ -195,9 +268,13 @@ def run_benchmark(
     return EvalReport(
         label=label,
         solver_model=cfg.solver_model,
+        use_verifier=cfg.use_verifier,
+        bank=bank if problems is None else "custom",
         n_problems=total,
         n_correct=n_correct,
         accuracy=(n_correct / total) if total else 0.0,
+        n_errors=sum(1 for r in results if r.errored),
+        **_latency(results),
         per_level=per_level,
         per_topic=per_topic,
         total_cost_usd=round(total_cost, 6),
@@ -207,3 +284,76 @@ def run_benchmark(
         mean_attempts=(sum(r.attempts for r in results) / total) if total else 0.0,
         results=results,
     )
+
+
+def rescore_report(
+    report: EvalReport, problems: Optional[list[ProblemState]] = None
+) -> tuple[EvalReport, list[str]]:
+    """Re-grade a saved report against the current answer key, without API calls.
+
+    Results are matched to problems by prompt text. Matched results take the
+    problem's current ``expected`` and are scored with the current comparator,
+    using the structured ``got_value``/``got_units`` when the report has them.
+    Unmatched results (the question was reworded since the run) keep their
+    original grade. Cost, token and tool fields are carried over unchanged.
+
+    Returns:
+        The re-scored report and the prompts that could not be matched.
+    """
+    from types import SimpleNamespace
+
+    from ..helper.tools import build_prompt
+
+    if problems is not None:
+        bank = list(problems)
+    else:
+        try:
+            bank = load_bank("all")
+        except ImportError:  # hard bank not written yet
+            bank = load_bank("standard")
+    by_prompt = {(p.prompt or build_prompt(p)): p for p in bank}
+
+    results: list[ProblemResult] = []
+    unmatched: list[str] = []
+    per_level: dict[str, dict[str, int]] = {}
+    per_topic: dict[str, dict[str, int]] = {}
+    for old in report.results:
+        problem = by_prompt.get(old.prompt)
+        if problem is None:
+            unmatched.append(old.prompt)
+            new = old
+        else:
+            answer = (
+                SimpleNamespace(
+                    formatted_answer=old.got,
+                    value=old.got_value,
+                    units=old.got_units,
+                    insufficient_data=old.got_insufficient_data,
+                )
+                if old.got is not None
+                else None
+            )
+            new = old.model_copy(
+                update={
+                    "expected": problem.expected,
+                    "correct": _score(answer, problem.expected, problem.tolerance),
+                }
+            )
+        results.append(new)
+        _bump(per_level, new.level, new.correct)
+        _bump(per_topic, new.topic, new.correct)
+
+    n_correct = sum(1 for r in results if r.correct)
+    total = len(results)
+    rescored = report.model_copy(
+        update={
+            "results": results,
+            "n_correct": n_correct,
+            "accuracy": (n_correct / total) if total else 0.0,
+            "n_errors": sum(1 for r in results if r.errored),
+            **_latency(results),
+            "per_level": per_level,
+            "per_topic": per_topic,
+        }
+    )
+    return rescored, unmatched

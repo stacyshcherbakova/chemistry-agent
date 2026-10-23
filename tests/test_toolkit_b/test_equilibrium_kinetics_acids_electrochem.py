@@ -288,6 +288,30 @@ class TestSolveEquation:
         with pytest.raises(ValueError):
             solve_equation("2*y + 3 = 11", "x")
 
+    def test_buffer_equation(self):
+        assert solve_equation(
+            "1.75e-5 = (x+0.0418)*x/(0.0625-x)", "x"
+        ) == "x = -0.04184, 2.614e-05"
+
+    def test_numeric_fallback_when_symbolic_times_out(self, monkeypatch):
+        import chemistry_agent.toolkit.mathtools as mathtools
+
+        def _slow_solve(*args, **kwargs):
+            raise TimeoutError
+
+        monkeypatch.setattr(mathtools.sympy, "solve", _slow_solve)
+        assert solve_equation(
+            "x*(0.03125+x)/(0.0875-x) = 1.75e-5", "x"
+        ) == "x = -0.03132, 4.890e-05"
+
+    def test_time_limit_interrupts_long_block(self):
+        import time
+        from chemistry_agent.toolkit.mathtools import _time_limit
+
+        with pytest.raises(TimeoutError):
+            with _time_limit(0.05):
+                time.sleep(1)
+
 
 class TestCalc:
     """Test the AST-safe arithmetic evaluator"""
@@ -303,6 +327,10 @@ class TestCalc:
     def test_rejects_import(self):
         with pytest.raises(ValueError):
             calc("__import__('os')")
+
+    def test_huge_power_fails_fast(self):
+        with pytest.raises(OverflowError):
+            calc("9 ** 9 ** 9")
 
     def test_rejects_names_calls_and_strings(self):
         with pytest.raises(ValueError):

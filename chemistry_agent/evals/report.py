@@ -17,6 +17,10 @@ def _accuracy_cell(bucket: dict[str, int]) -> str:
     return f"{correct}/{total} ({pct:.0f}%)"
 
 
+def _seconds(value: Optional[float]) -> str:
+    return "n/a" if value is None else f"{value:.1f} s"
+
+
 def _truncate(text: str, width: int = 60) -> str:
     text = " ".join(text.split())
     return text if len(text) <= width else text[: width - 1] + "…"
@@ -48,9 +52,19 @@ def render(report: EvalReport, console: Optional[Console] = None) -> None:
         f"total cost:    ${report.total_cost_usd:.4f}\n"
         f"tokens:        {report.total_input_tokens:,} in / "
         f"{report.total_output_tokens:,} out\n"
-        f"mean attempts: {report.mean_attempts:.2f}"
+        f"mean attempts: {report.mean_attempts:.2f}\n"
+        f"verifier:      {'on' if report.use_verifier else 'off'}\n"
+        f"bank:          {report.bank}\n"
+        f"latency:       {_seconds(report.latency_p50_s)} median, "
+        f"{_seconds(report.latency_p95_s)} p95"
     )
     console.print(Panel(summary, title="Eval summary", expand=False))
+    if report.n_errors:
+        console.print(
+            f"[bold yellow]{report.n_errors} problem(s) produced no answer because a "
+            "call failed (network or API).[/bold yellow] They count as incorrect "
+            "above but say nothing about the agent: re-run them."
+        )
 
     console.print(_breakdown_table("Accuracy by level", "Level", report.per_level))
     console.print(_breakdown_table("Accuracy by topic", "Topic", report.per_topic))
@@ -111,6 +125,12 @@ def compare(a: EvalReport, b: EvalReport, console: Optional[Console] = None) -> 
         table.add_row(metric, fmt.format(va), fmt.format(vb), delta_fmt.format(vb - va))
 
     table.add_row("solver model", a.solver_model, b.solver_model, "")
+    table.add_row(
+        "verifier",
+        "on" if a.use_verifier else "off",
+        "on" if b.use_verifier else "off",
+        "",
+    )
     row("accuracy", a.accuracy * 100, b.accuracy * 100, "{:.1f}%", "{:+.1f}%")
 
     for level in dict.fromkeys([*a.per_level, *b.per_level]):
@@ -141,5 +161,9 @@ def compare(a: EvalReport, b: EvalReport, console: Optional[Console] = None) -> 
         "{:+,.0f}",
     )
     row("mean attempts", a.mean_attempts, b.mean_attempts, "{:.2f}", "{:+.2f}")
+    if a.latency_p50_s is not None and b.latency_p50_s is not None:
+        row("latency median (s)", a.latency_p50_s, b.latency_p50_s, "{:.1f}", "{:+.1f}")
+    if a.latency_p95_s is not None and b.latency_p95_s is not None:
+        row("latency p95 (s)", a.latency_p95_s, b.latency_p95_s, "{:.1f}", "{:+.1f}")
 
     console.print(table)

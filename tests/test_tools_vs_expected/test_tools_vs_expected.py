@@ -1,6 +1,7 @@
 from chemistry_agent.helper.tools import TOOLS
 from chemistry_agent.problem_state.problem_state import ProblemState
 from chemistry_agent.helper.problems import examples
+from chemistry_agent.verification.comparator import answers_match
 
 class TestToolsVsExpectedResults:
     """Compare tool outputs directly with expected results from your examples"""
@@ -19,7 +20,9 @@ class TestToolsVsExpectedResults:
             
             try:
                 actual = self._call_tool_for_example(example)
-                match = actual == example.expected
+                # the key is written at the precision the scorer grades to, so the
+                # tool output must satisfy the scorer, not equal the string
+                match = answers_match(actual, example.expected)
                 
                 print(f"Actual:   '{actual}'")
                 print(f"Match:    {match}")

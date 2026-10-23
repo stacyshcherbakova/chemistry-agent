@@ -25,6 +25,13 @@ chem = "chemistry_agent.cli:app"
 pytest = ">=8.4.1,<9.0.0"
 ipykernel = ">=6.30.0,<7.0.0"
 
+# Optional: the Streamlit demo in app/. Install with `poetry install --with app`.
+[tool.poetry.group.app]
+optional = true
+
+[tool.poetry.group.app.dependencies]
+streamlit = "^1.66.1"
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

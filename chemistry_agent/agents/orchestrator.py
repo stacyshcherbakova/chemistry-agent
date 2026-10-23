@@ -100,6 +100,12 @@ class Orchestrator:
                 formatted_answer=answer.formatted_answer,
             )
 
+            if not self.config.use_verifier:
+                # Ablation mode: accept the first answer without an audit.
+                outcome.success = True
+                last_error = None
+                break
+
             try:
                 verdict = self.verifier.verify(prompt, plan, answer, tool_calls)
             except Exception as exc:

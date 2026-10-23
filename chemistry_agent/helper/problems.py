@@ -11,7 +11,7 @@ examples: list[ProblemState] = [
         level="gcse",
         topic="stoichiometry",
         params={"formula": "H2O"},
-        expected="18.02 g/mol",
+        expected="18.0 g/mol",
     ),
 
     ProblemState(
@@ -24,14 +24,16 @@ examples: list[ProblemState] = [
 
     ProblemState(
         task="mass_from_moles",
+        prompt="Convert 0.500 mol to grams using a molar mass of 44.01 g/mol.",
         level="gcse",
         topic="stoichiometry",
         params={"moles": 0.500, "molar_mass": 44.01},
-        expected="22.00 g",
+        expected="22.0 g",
     ),
 
     ProblemState(
         task="mix_concentration",
+        prompt="Mix 0.050 L of a 0.10 M solution with 0.100 L of a 0.20 M solution; what is the final concentration?",
         level="gcse",
         topic="solutions",
         params={"C1": 0.10, "V1": 0.050, "C2": 0.20, "V2": 0.100},
@@ -40,6 +42,7 @@ examples: list[ProblemState] = [
 
     ProblemState(
         task="dilution",
+        prompt="If you dilute 0.100 L of a 0.50 M solution to 0.10 M, what final volume is needed?",
         level="gcse",
         topic="solutions",
         params={"initial_conc": 0.50, "initial_vol": 0.100, "final_conc": 0.10},
@@ -52,7 +55,7 @@ examples: list[ProblemState] = [
         level="gcse",
         topic="stoichiometry",
         params={"actual_g": 8.4, "theoretical_g": 10.0},
-        expected="84.00 %"
+        expected="84 %"
     ),
 
     ProblemState(
@@ -61,7 +64,7 @@ examples: list[ProblemState] = [
         level="gcse",
         topic="energetics",
         params={"mass_g": 150.0, "c": 4.18, "delta_T": 25.0},
-        expected="15675.00 J"
+        expected="1.6×10⁴ J"
     ),
 
     ProblemState(
@@ -75,7 +78,7 @@ examples: list[ProblemState] = [
 
     ProblemState(
         task="calculate_density",
-        prompt="A metal block has a mass of 245 g and a volume of 30 cm³. What is its density in g/cm³?",
+        prompt="A metal block has a mass of 245 g and a volume of 30.0 cm³. What is its density in g/cm³?",
         level="gcse",
         topic="general",
         params={"mass_g": 245.0, "volume_cm3": 30.0},
@@ -88,7 +91,7 @@ examples: list[ProblemState] = [
         level="gcse",
         topic="acids_bases",
         params={"vol1_L": 0.025, "conc1": 0.120, "vol2_L": 0.015, "conc2": 0},
-        expected="0.20 M"
+        expected="0.200 M"
     ),
 
     # --- Multi-step questions (chain together two or more tools) ---
@@ -127,7 +130,7 @@ examples: list[ProblemState] = [
             "solution_volume_L": 0.500,
             "target_M": 0.050
         },
-        expected="2.26 L"
+        expected="2.3 L"
     ),
 
     ProblemState(
@@ -149,7 +152,7 @@ examples: list[ProblemState] = [
     ProblemState(
         prompt=(
             "You mix 0.100 L of 0.200 M AgNO₃ with 0.100 L of 0.200 M NaCl to form AgCl (1:1). "
-            "If you isolate 0.025 mol of AgCl, what is the **percent yield**? "
+            "If you isolate 0.0150 mol of AgCl, what is the **percent yield**? "
             "Give only the final answer with %."
         ),
         level="gcse",
@@ -161,9 +164,9 @@ examples: list[ProblemState] = [
             ],
             "product": "AgCl",
             "stoich": {"Ag+": 1, "Cl-": 1, "AgCl": 1},
-            "actual_product_mol": 0.025
+            "actual_product_mol": 0.0150
         },
-        expected="125.00 %"
+        expected="75.0 %"
     ),
 
     ProblemState(
@@ -171,7 +174,7 @@ examples: list[ProblemState] = [
             "You titrate 20.0 mL of 0.100 M HCl with 0.100 M NaOH. After adding 15.0 mL of NaOH, "
             "you dilute the 35.0 mL mixture to a total volume of 50.0 mL. "
             "What is the **final pH** after dilution? "
-            "Give only the final answer rounded with 2 significant figures."
+            "Give only the final answer to 2 decimal places."
         ),
         level="gcse",
         topic="acids_bases",
@@ -324,7 +327,7 @@ examples: list[ProblemState] = [
         level="university",
         topic="acids_bases",
         params={},
-        expected="1.34e-5 mol/L"
+        expected="1.3e-5 mol/L"
     ),
 
     # common ion: s = Ksp/[Cl⁻] = 1.8e-10 / 0.10 = 1.80e-9 mol/L
@@ -337,7 +340,7 @@ examples: list[ProblemState] = [
         level="university",
         topic="acids_bases",
         params={},
-        expected="1.80e-9 mol/L"
+        expected="1.8e-9 mol/L"
     ),
 
     # Ea = R·ln(k2/k1) / (1/T1 − 1/T2) = 8.314 × ln2 / (1/300 − 1/310)
@@ -389,8 +392,10 @@ examples: list[ProblemState] = [
     ProblemState(
         prompt=(
             "Balance the equation for the complete combustion of propane: "
-            "C3H8 + O2 -> CO2 + H2O. Give the balanced equation with integer "
-            "coefficients in the form 'C3H8 + 5O2 -> 3CO2 + 4H2O'."
+            "C3H8 + O2 -> CO2 + H2O. Give the balanced equation with the smallest "
+            "whole-number coefficients, written in the same style as the unbalanced "
+            "equation (coefficients before formulas, '->' as the arrow, no coefficient "
+            "written when it is 1)."
         ),
         level="university",
         topic="general",

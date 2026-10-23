@@ -1,0 +1,32 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: pipx install poetry==2.1.3
+
+      - name: Install dependencies
+        run: |
+          poetry env use python${{ matrix.python-version }}
+          poetry install --no-interaction
+
+      # Every test is mocked: no API key, no network, no cost.
+      - name: Run tests
+        run: poetry run pytest -q

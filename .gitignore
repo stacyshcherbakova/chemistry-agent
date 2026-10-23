@@ -11,3 +11,6 @@ generate_names.ipynb
 unit_conversion.ipynb
 chemistry_agent/helper/units.py
 simple_chemistry_agent.ipynb
+
+# Streamlit app usage log (questions and feedback from real users)
+app/usage_log.jsonl

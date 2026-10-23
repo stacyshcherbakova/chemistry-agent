@@ -64,7 +64,11 @@ _SUBMISSION: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
 
 @beta_tool
 def submit_answer(
-    value: float, units: str, formatted_answer: str, reasoning_summary: str
+    value: float,
+    units: str,
+    formatted_answer: str,
+    reasoning_summary: str,
+    insufficient_data: bool = False,
 ) -> str:
     """Submit the final answer to the problem. Call this exactly once, at the end.
 
@@ -80,6 +84,11 @@ def submit_answer(
         formatted_answer (str): Human-readable final answer carrying value and
             units in the conventional format, e.g. '18.02 g/mol'.
         reasoning_summary (str): Brief summary of how the answer was derived.
+        insufficient_data (bool): True only when the problem cannot be
+            answered as written because data is missing, contradictory, or
+            physically impossible. Then pass value=0, units='' and explain
+            what is wrong in formatted_answer. Never use it to dodge a hard
+            but answerable problem.
 
     Returns:
         str: Confirmation that the answer was recorded.
@@ -90,6 +99,7 @@ def submit_answer(
             "units": units,
             "formatted_answer": formatted_answer,
             "reasoning_summary": reasoning_summary,
+            "insufficient_data": insufficient_data,
         }
     )
     return "Answer recorded. You may stop."
@@ -122,12 +132,14 @@ def empirical_formula(elements: list[str], mass_percentages: list[float]) -> str
 def calc(expression: str) -> str:
     """Safely evaluate a plain arithmetic expression.
 
-    Only numeric literals, + - * / ** % // , unary +/- and parentheses are
-    allowed — no names, calls, or attribute access. Use this for EVERY
-    arithmetic step, however simple.
+    Only numeric literals, + - * / ** % // , unary +/-, parentheses and the
+    functions log10(x), ln(x), exp(x), sqrt(x) are allowed — no other names,
+    calls, or attribute access. Use this for EVERY arithmetic step, however
+    simple.
 
     Args:
-        expression (str): Arithmetic expression, e.g. '0.1132 / 0.5'.
+        expression (str): Arithmetic expression, e.g. '0.1132 / 0.5' or
+            '-log10(1.8e-5)'.
 
     Returns:
         str: The numeric result of the expression as a string.
@@ -212,6 +224,13 @@ Rules you MUST follow:
    conventional format (e.g. '18.02 g/mol'). If the answer is non-numeric
    (e.g. a balanced equation), pass value=0 and put the full answer in
    formatted_answer.
+4. Never invent data. If the problem cannot be answered as written because a
+   needed quantity is missing, two given values contradict each other, or the
+   setup is physically impossible, call submit_answer with
+   insufficient_data=true, value=0, units='' and a formatted_answer that says
+   exactly what is missing or inconsistent. Standard constants and textbook
+   values a student would be expected to know (atomic masses, R, F, Kw) are
+   not missing data.
 """
 
 

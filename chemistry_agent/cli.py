@@ -36,6 +36,12 @@ app = typer.Typer(
 console = Console()
 
 
+class BankChoice(str, Enum):
+    standard = "standard"
+    hard = "hard"
+    all = "all"
+
+
 class LevelChoice(str, Enum):
     gcse = "gcse"
     alevel = "alevel"
@@ -76,11 +82,11 @@ def _require_api_key() -> None:
         raise typer.Exit(1)
 
 
-def _build_config(solver_model: Optional[str]) -> AgentConfig:
-    cfg = AgentConfig()
+def _build_config(solver_model: Optional[str], use_verifier: bool = True) -> AgentConfig:
+    overrides: dict = {"use_verifier": use_verifier}
     if solver_model:
-        cfg = AgentConfig(solver_model=solver_model)
-    return cfg
+        overrides["solver_model"] = solver_model
+    return AgentConfig(**overrides)
 
 
 def _make_observer(out: Console):
@@ -234,11 +240,14 @@ def solve(
     json_out: Optional[Path] = typer.Option(
         None, "--json-out", help="Write the SolveOutcome as JSON to this path."
     ),
+    no_verifier: bool = typer.Option(
+        False, "--no-verifier", help="Skip the verifier; the first answer is final."
+    ),
 ) -> None:
     """Solve one chemistry problem with live progress rendering."""
     _require_api_key()
 
-    cfg = _build_config(solver_model)
+    cfg = _build_config(solver_model, use_verifier=not no_verifier)
     obs = _make_observer(console)
     orchestrator = Orchestrator(config=cfg, observer=obs)
     outcome = orchestrator.solve(
@@ -279,6 +288,14 @@ def eval_cmd(
         "--json-out",
         help="Report JSON path (default: eval_{label or timestamp}.json).",
     ),
+    bank: BankChoice = typer.Option(
+        BankChoice.standard,
+        "--bank",
+        help="Problem bank: standard (30), hard (multi-step + unanswerable), or all.",
+    ),
+    no_verifier: bool = typer.Option(
+        False, "--no-verifier", help="Skip the verifier (ablation run)."
+    ),
 ) -> None:
     """Run the benchmark problem bank and save an eval report."""
     _require_api_key()
@@ -288,11 +305,11 @@ def eval_cmd(
     from .evals.harness import run_benchmark
     from .evals.report import render, save_json
 
-    cfg = _build_config(solver_model)
+    cfg = _build_config(solver_model, use_verifier=not no_verifier)
     factory = lambda: Orchestrator(config=cfg)  # noqa: E731
 
     def on_progress(index: int, total: int, result) -> None:
-        mark = "✓" if result.correct else "✗"
+        mark = "✓" if result.correct else ("!" if result.errored else "✗")
         prompt = result.prompt
         prefix = prompt if len(prompt) <= 60 else prompt[:57] + "..."
         console.print(f"  [{index + 1}/{total}] {mark} {prefix}", markup=False)
@@ -305,6 +322,7 @@ def eval_cmd(
         levels=levels,
         config=cfg,
         on_progress=on_progress,
+        bank=bank.value,
     )
 
     render(report, console=console)
@@ -331,6 +349,29 @@ def compare(
     from .evals.report import load_json
 
     compare_reports(load_json(a), load_json(b), console=console)
+
+
+@app.command()
+def rescore(
+    report_path: Path = typer.Argument(..., exists=True, help="Saved eval report JSON."),
+    json_out: Optional[Path] = typer.Option(
+        None,
+        "--json-out",
+        help="Where to write the re-scored report (default: <name>_rescored.json).",
+    ),
+) -> None:
+    """Re-grade a saved eval report against the current answer key (no API calls)."""
+    from .evals.harness import rescore_report
+    from .evals.report import load_json, render, save_json
+
+    report, unmatched = rescore_report(load_json(report_path))
+    render(report, console=console)
+    for prompt in unmatched:
+        console.print(f"kept original grade (question reworded): {prompt}", markup=False)
+    if json_out is None:
+        json_out = report_path.with_name(f"{report_path.stem}_rescored.json")
+    save_json(report, json_out)
+    console.print(f"saved re-scored report to {json_out}", markup=False)
 
 
 if __name__ == "__main__":  # pragma: no cover

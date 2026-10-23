@@ -62,6 +62,14 @@ class FinalAnswer(BaseModel):
     reasoning_summary: str = Field(
         description="Brief summary of how the answer was derived"
     )
+    insufficient_data: bool = Field(
+        default=False,
+        description=(
+            "True when the problem cannot be answered as written (missing, "
+            "contradictory, or physically impossible data); value is then "
+            "meaningless and formatted_answer explains what is wrong"
+        ),
+    )
 
 
 class Verdict(BaseModel):

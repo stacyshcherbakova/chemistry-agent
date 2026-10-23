@@ -7,8 +7,14 @@ Pipeline (``answers_match``):
   a. normalize both strings (unicode superscripts, scientific notation,
      whitespace, middle dots); exact match wins immediately.
   b. numeric path: parse ``<value> <unit?>`` from each side, resolve unit
-     aliases (``M`` -> ``mol/L``, ``dm³`` -> ``L``, ...), convert with pint
-     and compare with ``math.isclose`` at the given relative tolerance.
+     aliases (``M`` -> ``mol/L``, ``dm³`` -> ``L``, ...) and convert the
+     candidate into the expected unit with pint. By default the comparison
+     is precision-aware: the candidate must agree with the expected value to
+     within half a unit in the expected value's last written digit, i.e. it
+     rounds to the expected answer at the precision the key is written to
+     (``0.50 L`` -> ±0.005 L, ``1.6×10⁴ J`` -> ±500 J). Extra precision in
+     the candidate is fine; less precision only passes if it still rounds to
+     the key. Passing ``rel_tol`` switches to a plain relative tolerance.
   c. formula fallback: compare as chemical formula / equation strings
      (subscript digits normalized, whitespace stripped, case-sensitive).
 
@@ -18,6 +24,7 @@ False rather than raising.
 
 import math
 import re
+from decimal import Decimal, InvalidOperation
 
 import pint
 
@@ -101,6 +108,8 @@ _APPROX_RE = re.compile(r"^[≈~≃∼]\s*")
 # Requires whitespace before the bracket so compound units such as
 # "mol/(L*s)" keep their parentheses.
 _TRAILING_PAREN_RE = re.compile(r"\s+\(.*\)\s*$")
+# unit strings that mean "no unit": "0.000317 dimensionless" is a bare number
+_NO_UNIT = {"dimensionless", "unitless", "no units", "none"}
 
 # strings that clearly denote a chemical equation, not a quantity
 _EQUATION_MARKERS = ("->", "→", "⇌", "<=>", "=>")
@@ -116,6 +125,8 @@ def normalize(text: str) -> str:
     if not isinstance(text, str):
         return ""
     s = text.translate(_SPACE_VARIANTS)
+    # typographic minus (U+2212) and en dash, as models often write "−74.80"
+    s = s.replace("\u2212", "-").replace("\u2013", "-")
     s = s.translate(_SUPERSCRIPTS)
     s = _SCI_NOTATION_RE.sub(lambda m: "e" + m.group(1), s)
     s = _BARE_SCI_RE.sub(lambda m: "1e" + m.group(1), s)
@@ -145,7 +156,33 @@ def parse_quantity(text: str) -> tuple[float, str | None]:
         raise ValueError(f"no numeric value in {text!r}")
     value = float(m.group(0))
     unit = _TRAILING_PAREN_RE.sub("", s[m.end():]).strip() or None
+    if unit is not None and unit.lower() in _NO_UNIT:
+        unit = None
     return value, unit
+
+
+def half_unit_last_place(text: str) -> float:
+    """Half a unit in the last written digit of the leading number in ``text``.
+
+    ``"0.50 L"`` -> 0.005, ``"84 %"`` -> 0.5, ``"1.6×10⁴ J"`` -> 500,
+    ``"1.34e-5 mol/L"`` -> 5e-8. Trailing zeros before the decimal point are
+    read as significant (``"16000"`` -> 0.5), so write such keys in
+    scientific notation.
+
+    Raises:
+        ValueError: if no leading numeric value can be found.
+    """
+    s = normalize(text)
+    s = _PREFIX_RE.sub("", s)
+    s = _APPROX_RE.sub("", s)
+    m = _NUMBER_RE.match(s)
+    if not m:
+        raise ValueError(f"no numeric value in {text!r}")
+    try:
+        exponent = Decimal(m.group(0)).as_tuple().exponent
+    except InvalidOperation as exc:  # pragma: no cover - regex guarantees a number
+        raise ValueError(f"unparseable number in {text!r}") from exc
+    return 0.5 * 10.0 ** int(exponent)
 
 
 def _resolve_unit(unit: str) -> str:
@@ -188,12 +225,16 @@ def _prefix_symbol(text: str) -> str | None:
     return m.group(0).split("=")[0].strip() if m else None
 
 
-def answers_match(candidate: str, expected: str, rel_tol: float = 0.01) -> bool:
+def answers_match(
+    candidate: str, expected: str, rel_tol: float | None = None
+) -> bool:
     """True if ``candidate`` and ``expected`` denote the same answer.
 
-    ``500 mL`` matches ``0.50 L``; ``84 %`` matches ``84.00 %``;
-    ``18.02 g/mol`` matches ``18.0 g mol⁻¹`` (within ``rel_tol``);
-    ``CH₂O`` matches ``CH2O``. Unparseable or empty input returns False.
+    ``500 mL`` matches ``0.50 L``; ``0.1667 M`` matches ``0.17 M`` but
+    ``0.2 M`` does not; ``CH₂O`` matches ``CH2O``. With ``rel_tol=None``
+    (the default) numbers are compared at the precision ``expected`` is
+    written to; pass a float for a plain relative tolerance instead.
+    Unparseable or empty input returns False.
     """
     nc = normalize(candidate)
     ne = normalize(expected)
@@ -220,8 +261,12 @@ def answers_match(candidate: str, expected: str, rel_tol: float = 0.01) -> bool:
         cand_val, cand_unit = parse_quantity(candidate)
         exp_val, exp_unit = parse_quantity(expected)
     except (ValueError, TypeError):
-        # c. formula fallback
-        return _formulas_match(nc, ne)
+        # c. formula fallback, ignoring trailing bracketed working as the
+        # numeric path does: "C4H8O2 (empirical formula C2H4O)"
+        if _formulas_match(nc, ne):
+            return True
+        stripped = normalize(_TRAILING_PAREN_RE.sub("", candidate))
+        return bool(stripped) and stripped != nc and _formulas_match(stripped, ne)
 
     if cand_unit is not None and exp_unit is not None:
         cu = _resolve_unit(cand_unit)
@@ -241,6 +286,11 @@ def answers_match(candidate: str, expected: str, rel_tol: float = 0.01) -> bool:
         return False
 
     try:
-        return math.isclose(cand_val, exp_val, rel_tol=rel_tol)
+        if rel_tol is not None:
+            return math.isclose(cand_val, exp_val, rel_tol=rel_tol)
+        half_unit = half_unit_last_place(expected)
+        # tiny slack so float noise (0.1 + 0.2) never decides a boundary case
+        slack = 1e-9 * max(abs(exp_val), half_unit)
+        return abs(cand_val - exp_val) <= half_unit + slack
     except (TypeError, ValueError):  # pragma: no cover - defensive
         return False

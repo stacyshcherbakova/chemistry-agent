@@ -177,3 +177,15 @@ def test_rejected_with_no_issues_gets_default_feedback():
     verdict = verifier.verify("prompt", make_plan(), make_answer(), [])
 
     assert verdict.feedback_for_solver == "Answer rejected; re-derive carefully."
+
+
+def test_user_message_shows_insufficient_data_claim():
+    client = make_client(make_response(APPROVED))
+    verifier = Verifier(client=client)
+    answer = make_answer().model_copy(update={"insufficient_data": True})
+
+    verifier.verify("p", make_plan(), answer, ["calc"])
+
+    content = client.messages.parse.call_args.kwargs["messages"][0]["content"]
+    assert "Insufficient data claimed: True" in content
+    assert "ANSWERABILITY" in VERIFIER_SYSTEM

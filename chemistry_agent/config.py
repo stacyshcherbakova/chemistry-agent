@@ -35,6 +35,10 @@ class AgentConfig(BaseModel):
     # so total solver attempts = max_retries + 1.
     max_retries: int = 2
 
+    # False skips the verifier entirely: the first submitted answer is final.
+    # Used to measure what the verifier is worth (`chem eval --no-verifier`).
+    use_verifier: bool = True
+
     planner_max_tokens: int = 4096
     verifier_max_tokens: int = 4096
     solver_max_tokens: int = 16000

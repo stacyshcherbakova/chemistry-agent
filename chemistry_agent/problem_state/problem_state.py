@@ -10,6 +10,8 @@ class ProblemState(BaseModel):
     )
     level: Literal["gcse", "alevel", "university"] = "gcse"
     topic: str = "general"
-    tolerance: float = 0.01  # relative tolerance for comparison
+    # None: score at the precision ``expected`` is written to (see
+    # verification.comparator). A float switches to a relative tolerance.
+    tolerance: Optional[float] = None
     params: Dict[str, Any]
     expected: str

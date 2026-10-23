@@ -307,6 +307,27 @@ class TestCalc:
         with pytest.raises(ValueError, match="calc\\(\\) requires an 'expression' argument"):
             calc()
 
+    def test_log_and_exp_functions(self):
+        """Test the whitelisted single-argument functions"""
+        assert calc("-log10(1.8e-5)") == pytest.approx(4.7447, abs=1e-4)
+        assert calc("10 ** -4.44") == pytest.approx(3.631e-5, rel=1e-3)
+        assert calc("ln(exp(2))") == pytest.approx(2.0)
+        assert calc("sqrt(1.75e-5 * 0.1)") == pytest.approx(1.3229e-3, rel=1e-4)
+
+    @pytest.mark.parametrize("expression", [
+        "abs(-1)", "log10(1, 2)", "log10(x=1)", "math.log10(2)", "x + 1",
+        "__import__('os')",
+    ])
+    def test_rejects_other_names_and_calls(self, expression):
+        """Test anything beyond the whitelist is rejected"""
+        with pytest.raises(ValueError):
+            calc(expression)
+
+    def test_huge_power_fails_fast(self):
+        """Test integer powers can't build huge integers and hang"""
+        with pytest.raises(OverflowError):
+            calc("9 ** 9 ** 9")
+
 
 class TestBuildPrompt:
     """Test prompt building for different tasks"""

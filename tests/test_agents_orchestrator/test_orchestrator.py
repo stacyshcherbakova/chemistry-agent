@@ -223,3 +223,33 @@ class TestObserver:
             StubPlanner(), StubSolver(), StubVerifier(), observer=bad_observer
         ).solve("p")
         assert outcome.success is True
+
+
+class TestVerifierSwitch:
+    """use_verifier=False is the ablation: first answer is final, no audit."""
+
+    def test_verifier_not_called(self):
+        verifier = StubVerifier(error=AssertionError("verifier must not run"))
+        cfg = AgentConfig(use_verifier=False)
+        outcome = Orchestrator(StubPlanner(), StubSolver(), verifier, config=cfg).solve("p")
+        assert outcome.success is True
+        assert outcome.attempts == 1
+        assert outcome.verdict is None
+        assert outcome.error is None
+
+    def test_no_retry_without_verifier(self):
+        solver = StubSolver([make_answer("1 g/mol"), make_answer()])
+        cfg = AgentConfig(use_verifier=False)
+        outcome = Orchestrator(StubPlanner(), solver, StubVerifier(), config=cfg).solve("p")
+        assert outcome.answer.formatted_answer == "1 g/mol"
+        assert len(solver.results) == 1  # second answer never requested
+
+    def test_solver_errors_still_retried_without_verifier(self):
+        solver = StubSolver([RuntimeError("boom"), make_answer()])
+        cfg = AgentConfig(use_verifier=False)
+        outcome = Orchestrator(StubPlanner(), solver, StubVerifier(), config=cfg).solve("p")
+        assert outcome.success is True
+        assert outcome.attempts == 2
+
+    def test_verifier_on_by_default(self):
+        assert AgentConfig().use_verifier is True

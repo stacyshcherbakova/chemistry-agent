@@ -5,6 +5,7 @@ import pytest
 from chemistry_agent.verification.comparator import (
     UNIT_ALIASES,
     answers_match,
+    half_unit_last_place,
     normalize,
     parse_quantity,
 )
@@ -72,7 +73,8 @@ class TestAnswersMatch:
         assert answers_match("3.2×10⁻⁴ mol/L", "3.2e-4 M")
 
     def test_g_per_mol_alias(self):
-        assert answers_match("18.0 g mol⁻¹", "18.02 g/mol")
+        assert answers_match("18.02 g mol⁻¹", "18.02 g/mol")
+        assert answers_match("18.015 g mol⁻¹", "18.02 g/mol")
 
     def test_pH_prefix(self):
         assert answers_match("pH = 2.87", "2.87")
@@ -131,12 +133,69 @@ class TestAnswersMatch:
         # seen in a real eval run: "L (500 mL)" was parsed as the unit
         assert answers_match("0.50 L (500 mL)", "0.50 L")
 
+    def test_dimensionless_unit_is_no_unit(self):
+        # seen in a real eval run: value 0.000317, units "dimensionless"
+        assert answers_match("0.000317 dimensionless", "3.17×10⁻⁴")
+        assert not answers_match("0.000317 dimensionless", "3.17×10⁻⁴ M")
+
+    def test_formula_with_trailing_working(self):
+        # seen in a real eval run
+        assert answers_match(
+            "C4H8O2 (empirical formula C2H4O, M ≈ 88.1 g/mol)", "C4H8O2"
+        )
+        assert not answers_match("C2H4O (molecular formula C4H8O2)", "C4H8O2")
+        assert answers_match("Ca(OH)2", "Ca(OH)2")
+
     def test_decoration_does_not_rescue_a_wrong_value(self):
         assert not answers_match("≈0.20 M (0.030 mol / 0.15 L)", "0.17 M")
         assert not answers_match("0.40 L (400 mL)", "0.50 L")
 
     def test_compound_unit_parentheses_kept(self):
         assert parse_quantity("2.0 mol/(L*s)") == (2.0, "mol/(L*s)")
+
+
+class TestPrecisionAware:
+    """Default scoring: round the candidate to the precision the key is written to."""
+
+    def test_half_unit_last_place(self):
+        assert half_unit_last_place("0.50 L") == pytest.approx(0.005)
+        assert half_unit_last_place("84 %") == pytest.approx(0.5)
+        assert half_unit_last_place("1.6×10⁴ J") == pytest.approx(500)
+        assert half_unit_last_place("1.34e-5 mol/L") == pytest.approx(5e-8)
+        assert half_unit_last_place("pH = 2.87") == pytest.approx(0.005)
+        assert half_unit_last_place("-74.80 kJ/mol") == pytest.approx(0.005)
+
+    def test_extra_precision_accepted(self):
+        assert answers_match("0.1667 M", "0.17 M")
+        assert answers_match("0.167 M", "0.17 M")
+        assert answers_match("15675 J", "1.6×10⁴ J")
+
+    def test_less_precision_rejected_unless_it_rounds_to_the_key(self):
+        assert not answers_match("0.2 M", "0.17 M")
+        assert not answers_match("18.0 g/mol", "18.02 g/mol")
+        assert answers_match("84 %", "84.00 %")  # same value, fewer zeros
+
+    def test_typographic_minus_sign(self):
+        # seen in a real eval run: "−74.80 kJ/mol" with U+2212
+        assert answers_match("\u221274.80 kJ/mol", "-74.80 kJ/mol")
+        assert not answers_match("\u221274.80 kJ/mol", "74.80 kJ/mol")
+
+    def test_wrong_last_digit_rejected(self):
+        assert not answers_match("0.18 M", "0.17 M")
+        assert not answers_match("1.4e-5 mol/L", "1.3e-5 mol/L")
+
+    def test_rounding_boundary(self):
+        assert answers_match("0.165 M", "0.17 M")
+        assert answers_match("0.1749 M", "0.17 M")
+        assert not answers_match("0.1751 M", "0.17 M")
+
+    def test_precision_applies_after_unit_conversion(self):
+        assert answers_match("500 mL", "0.50 L")
+        assert answers_match("504 mL", "0.50 L")
+        assert not answers_match("520 mL", "0.50 L")
+
+    def test_explicit_rel_tol_still_supported(self):
+        assert answers_match("18.0 g/mol", "18.02 g/mol", rel_tol=0.01)
 
 
 class TestUnitAliases:

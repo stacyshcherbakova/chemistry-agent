@@ -4,7 +4,14 @@ import pytest
 from rich.console import Console
 
 from chemistry_agent.config import AgentConfig
-from chemistry_agent.evals.harness import EvalReport, ProblemResult, run_benchmark
+from chemistry_agent.evals.harness import (
+    EvalReport,
+    ProblemResult,
+    INSUFFICIENT_DATA,
+    load_bank,
+    rescore_report,
+    run_benchmark,
+)
 from chemistry_agent.evals.report import compare, load_json, render, save_json
 from chemistry_agent.models import FinalAnswer, Plan, PlanStep, SolveOutcome, UsageTotals
 from chemistry_agent.problem_state.problem_state import ProblemState
@@ -90,10 +97,10 @@ def factory_for(stub):
 
 class TestScoring:
     def test_accuracy_and_tolerance(self):
-        # "18.0 g/mol" is within 1% of "18.02 g/mol" -> correct via comparator
+        # "18.016 g/mol" rounds to the key "18.02 g/mol" -> correct via comparator
         stub = StubOrchestrator(
             {
-                "molar mass of H2O?": "18.0 g/mol",
+                "molar mass of H2O?": "18.016 g/mol",
                 "buffer pH?": "pH = 4.74",
                 "cell potential?": "E = 9.999 V",
             }
@@ -299,3 +306,137 @@ class TestStructuredScoring:
         stub = StructuredStub("about point one seven molar", 0.17, "M")
         report = run_benchmark(lambda: stub, problems=one_problem())
         assert report.results[0].got == "about point one seven molar"
+
+
+class TestRescore:
+    def test_corrected_key_flips_the_grade(self):
+        stub = StructuredStub("0.1667 M", 0.1667, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem("0.1 M"))
+        assert report.n_correct == 0
+
+        rescored, unmatched = rescore_report(report, problems=one_problem("0.17 M"))
+        assert unmatched == []
+        assert rescored.n_correct == 1
+        assert rescored.accuracy == 1.0
+        assert rescored.results[0].expected == "0.17 M"
+        assert rescored.per_topic == {"solutions": {"correct": 1, "total": 1}}
+
+    def test_reworded_question_keeps_original_grade(self):
+        stub = StructuredStub("0.1667 M", 0.1667, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem("0.1 M"))
+        reworded = one_problem("0.17 M")
+        reworded[0].prompt = "a differently worded question?"
+
+        rescored, unmatched = rescore_report(report, problems=reworded)
+        assert unmatched == ["mix two solutions?"]
+        assert rescored.n_correct == 0
+
+    def test_cost_and_tokens_carried_over(self):
+        stub = StructuredStub("0.17 M", 0.17, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem())
+        rescored, _ = rescore_report(report, problems=one_problem())
+        assert rescored.total_cost_usd == report.total_cost_usd
+        assert rescored.total_input_tokens == report.total_input_tokens
+
+
+class FlakyStub:
+    """Fails like a dropped connection on the second problem."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def solve(self, prompt, level_hint=None):
+        self.calls += 1
+        if self.calls == 2:
+            outcome = outcome_for(None, success=False, attempts=0, cost=0.0)
+            return outcome.model_copy(update={"error": "planner: Connection error."})
+        return outcome_for("18.02 g/mol")
+
+
+class TestErrorsAreNotWrongAnswers:
+    def test_connection_failure_counted_as_error(self):
+        stub = FlakyStub()
+        report = run_benchmark(lambda: stub, problems=bank()[:1] * 3)
+        assert report.n_problems == 3
+        assert report.n_errors == 1
+        assert report.n_correct == 2
+        assert [r.errored for r in report.results] == [False, True, False]
+
+    def test_wrong_answer_is_not_an_error(self):
+        stub = StubOrchestrator({"molar mass of H2O?": "99 g/mol"})
+        report = run_benchmark(lambda: stub, problems=bank()[:1])
+        assert report.n_errors == 0
+        assert report.n_correct == 0
+
+    def test_old_reports_without_the_field_still_load(self, tmp_path):
+        stub = StubOrchestrator({})
+        report = run_benchmark(lambda: stub, problems=bank()[:1])
+        data = report.model_dump()
+        data.pop("n_errors")
+        assert EvalReport.model_validate(data).n_errors == 0
+
+
+class FlaggedStub:
+    """Submits an answer flagged insufficient_data for every prompt."""
+
+    def solve(self, prompt, level_hint=None):
+        outcome = outcome_for("Cannot be answered: the volume is not given.", value=0, units="")
+        outcome.answer.insufficient_data = True
+        return outcome
+
+
+class TestInsufficientData:
+    def test_flag_is_correct_for_unanswerable_problem(self):
+        report = run_benchmark(lambda: FlaggedStub(), problems=one_problem(INSUFFICIENT_DATA))
+        assert report.n_correct == 1
+        assert report.results[0].got_insufficient_data is True
+
+    def test_flag_is_wrong_for_answerable_problem(self):
+        report = run_benchmark(lambda: FlaggedStub(), problems=one_problem("0.17 M"))
+        assert report.n_correct == 0
+
+    def test_number_is_wrong_for_unanswerable_problem(self):
+        stub = StructuredStub("0.17 M", 0.17, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem(INSUFFICIENT_DATA))
+        assert report.n_correct == 0
+
+    def test_rescore_keeps_the_flag(self):
+        report = run_benchmark(lambda: FlaggedStub(), problems=one_problem(INSUFFICIENT_DATA))
+        rescored, _ = rescore_report(report, problems=one_problem(INSUFFICIENT_DATA))
+        assert rescored.n_correct == 1
+
+
+class TestLatencyAndMetadata:
+    def test_seconds_and_percentiles_recorded(self):
+        stub = StructuredStub("0.17 M", 0.17, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem() * 4)
+        assert all(r.seconds is not None and r.seconds >= 0 for r in report.results)
+        assert report.latency_p50_s is not None
+        assert report.latency_p95_s is not None
+        assert report.latency_p95_s >= report.latency_p50_s
+
+    def test_errored_problems_excluded_from_latency(self):
+        stub = FlakyStub()
+        report = run_benchmark(lambda: stub, problems=bank()[:1] * 2)
+        assert report.n_errors == 1
+        assert report.latency_p50_s is not None
+
+    def test_report_records_verifier_and_bank(self):
+        from chemistry_agent.config import AgentConfig
+
+        stub = StructuredStub("0.17 M", 0.17, "M")
+        report = run_benchmark(
+            lambda: stub, problems=one_problem(), config=AgentConfig(use_verifier=False)
+        )
+        assert report.use_verifier is False
+        assert report.bank == "custom"
+
+
+class TestBanks:
+    def test_standard_bank(self):
+        assert len(load_bank("standard")) == 30
+
+    def test_unknown_bank_rejected(self):
+        with pytest.raises(ValueError):
+            load_bank("nope")
+

@@ -6,6 +6,9 @@ Pure functions: no SDK imports, formatted-string (or plain float) returns.
 import ast
 import math
 import re
+import signal
+import threading
+from contextlib import contextmanager
 
 import pint
 import sympy
@@ -120,17 +123,72 @@ def solve_equation(equation: str, unknown: str) -> str:
     symbol = sympy.Symbol(unknown)
     if symbol not in lhs.free_symbols | rhs.free_symbols:
         raise ValueError(f"unknown '{unknown}' does not appear in the equation")
-    solutions = sympy.solve(sympy.Eq(lhs, rhs), symbol)
     real_values: list[float] = []
-    for solution in solutions:
-        value = complex(sympy.N(solution))
-        if abs(value.imag) < 1e-12:
-            real_values.append(value.real)
+    try:
+        with _time_limit(_SOLVE_SECONDS):
+            for solution in sympy.solve(sympy.Eq(lhs, rhs), symbol):
+                value = complex(sympy.N(solution))
+                if abs(value.imag) < 1e-12:
+                    real_values.append(value.real)
+    except TimeoutError:
+        real_values = _numeric_real_roots(lhs - rhs, symbol)
     if not real_values:
         raise ValueError("no real solutions found")
     real_values.sort()
     formatted = ", ".join(_format_sig4(v) for v in real_values)
     return f"{unknown} = {formatted}"
+
+
+# Symbolic solving can blow up on cubics with awkward float coefficients
+# (exact radicals over huge rationals), which once hung an eval run for an
+# hour. Past this limit we fall back to numeric polynomial roots.
+_SOLVE_SECONDS = 5.0
+
+
+@contextmanager
+def _time_limit(seconds: float):
+    """Raise TimeoutError if the block runs longer than ``seconds``.
+
+    Uses SIGALRM, so the limit only applies on Unix in the main thread;
+    elsewhere (e.g. Streamlit's script thread) the block runs unbounded.
+    """
+    if (
+        not hasattr(signal, "SIGALRM")
+        or threading.current_thread() is not threading.main_thread()
+    ):
+        yield
+        return
+
+    def _raise_timeout(signum, frame):
+        raise TimeoutError
+
+    previous = signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _numeric_real_roots(expression, symbol) -> list[float]:
+    """Real roots of a rational expression, found numerically."""
+    numerator, denominator = sympy.fraction(sympy.together(expression))
+    try:
+        roots = sympy.Poly(numerator, symbol).nroots()
+    except sympy.PolynomialError as exc:
+        raise ValueError(
+            "equation too complex to solve; simplify it or rearrange by hand"
+        ) from exc
+    real_values = []
+    for root in roots:
+        value = complex(root)
+        if abs(value.imag) >= 1e-12:
+            continue
+        if abs(complex(denominator.subs(symbol, value.real))) < 1e-300:
+            continue
+        real_values.append(value.real)
+    return real_values
 
 
 _ALLOWED_CALC_NODES = (
@@ -191,7 +249,8 @@ def calc(expression: str) -> float:
         if isinstance(node, ast.Expression):
             return _evaluate(node.body)
         if isinstance(node, ast.Constant):
-            return node.value
+            # Floats only: int ** int would build arbitrarily large integers.
+            return float(node.value)
         if isinstance(node, ast.UnaryOp):
             operand = _evaluate(node.operand)
             return -operand if isinstance(node.op, ast.USub) else +operand
