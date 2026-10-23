@@ -64,6 +64,24 @@ def _bump(breakdown: dict[str, dict[str, int]], key: str, correct: bool) -> None
         bucket["correct"] += 1
 
 
+def _score(answer, expected: str, tolerance: float) -> bool:
+    """Score a submitted answer against the expected one.
+
+    Correct if either the human-readable ``formatted_answer`` or the solver's
+    structured ``value`` + ``units`` matches. The structured fields come from
+    the ``submit_answer`` tool schema, so they are immune to the prose the
+    model sometimes adds to the formatted string ("≈0.17 M (0.025 mol / 0.15 L)").
+    """
+    if answer is None:
+        return False
+    if answers_match(answer.formatted_answer, expected, rel_tol=tolerance):
+        return True
+    if answer.value is None:
+        return False
+    structured = f"{float(answer.value)!r} {answer.units or ''}".strip()
+    return answers_match(structured, expected, rel_tol=tolerance)
+
+
 def run_benchmark(
     orchestrator_factory: Callable[[], object],
     problems: Optional[list[ProblemState]] = None,
@@ -124,11 +142,7 @@ def run_benchmark(
             outcome = orchestrator_factory().solve(prompt, level_hint=problem.level)
 
             got = outcome.answer.formatted_answer if outcome.answer else None
-            correct = (
-                answers_match(got, problem.expected, rel_tol=problem.tolerance)
-                if got is not None
-                else False
-            )
+            correct = _score(outcome.answer, problem.expected, problem.tolerance)
             result = ProblemResult(
                 prompt=prompt,
                 expected=problem.expected,

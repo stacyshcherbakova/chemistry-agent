@@ -122,6 +122,22 @@ class TestAnswersMatch:
             "C3H8 + 4O2 -> 3CO2 + 4H2O", "C3H8 + 5O2 -> 3CO2 + 4H2O"
         )
 
+    def test_approximation_sign_ignored(self):
+        # seen in a real eval run: the value was right but scored wrong
+        assert answers_match("≈0.17 M (0.025 mol / 0.15 L)", "0.17 M")
+        assert answers_match("~ 2.3 g", "2.30 g")
+
+    def test_trailing_bracketed_working_ignored(self):
+        # seen in a real eval run: "L (500 mL)" was parsed as the unit
+        assert answers_match("0.50 L (500 mL)", "0.50 L")
+
+    def test_decoration_does_not_rescue_a_wrong_value(self):
+        assert not answers_match("≈0.20 M (0.030 mol / 0.15 L)", "0.17 M")
+        assert not answers_match("0.40 L (400 mL)", "0.50 L")
+
+    def test_compound_unit_parentheses_kept(self):
+        assert parse_quantity("2.0 mol/(L*s)") == (2.0, "mol/(L*s)")
+
 
 class TestUnitAliases:
 

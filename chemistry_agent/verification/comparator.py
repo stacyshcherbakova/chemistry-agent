@@ -95,6 +95,13 @@ _PREFIX_RE = re.compile(r"^\s*[A-Za-zΔ°½'′_][A-Za-z0-9Δ°½'′_]*\s*=\s*"
 
 _NUMBER_RE = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 
+# a leading "approximately" marker the model sometimes adds: "≈0.17 M", "~ 2.3 g"
+_APPROX_RE = re.compile(r"^[≈~≃∼]\s*")
+# trailing working or an alternative unit in brackets: "0.50 L (500 mL)".
+# Requires whitespace before the bracket so compound units such as
+# "mol/(L*s)" keep their parentheses.
+_TRAILING_PAREN_RE = re.compile(r"\s+\(.*\)\s*$")
+
 # strings that clearly denote a chemical equation, not a quantity
 _EQUATION_MARKERS = ("->", "→", "⇌", "<=>", "=>")
 
@@ -123,6 +130,8 @@ def parse_quantity(text: str) -> tuple[float, str | None]:
 
     Supports scientific notation and an optional ``<symbol> =`` prefix
     (``pH = 2.87``, ``Kc = 54.08``, ``E°cell = 1.04 V``, ``t½ = 231 s``).
+    A leading approximation sign (``≈0.17 M``) and trailing bracketed
+    working (``0.50 L (500 mL)``) are ignored.
     The unit may be None for dimensionless answers.
 
     Raises:
@@ -130,11 +139,12 @@ def parse_quantity(text: str) -> tuple[float, str | None]:
     """
     s = normalize(text)
     s = _PREFIX_RE.sub("", s)
+    s = _APPROX_RE.sub("", s)
     m = _NUMBER_RE.match(s)
     if not m:
         raise ValueError(f"no numeric value in {text!r}")
     value = float(m.group(0))
-    unit = s[m.end():].strip() or None
+    unit = _TRAILING_PAREN_RE.sub("", s[m.end():]).strip() or None
     return value, unit
 
 

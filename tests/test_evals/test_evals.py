@@ -10,7 +10,9 @@ from chemistry_agent.models import FinalAnswer, Plan, PlanStep, SolveOutcome, Us
 from chemistry_agent.problem_state.problem_state import ProblemState
 
 
-def outcome_for(answer_text, *, attempts=1, success=True, cost=0.01, tools=None):
+def outcome_for(
+    answer_text, *, attempts=1, success=True, cost=0.01, tools=None, value=None, units=None
+):
     return SolveOutcome(
         prompt="p",
         plan=Plan(
@@ -22,8 +24,8 @@ def outcome_for(answer_text, *, attempts=1, success=True, cost=0.01, tools=None)
         ),
         answer=(
             FinalAnswer(
-                value=None,
-                units=None,
+                value=value,
+                units=units,
                 formatted_answer=answer_text,
                 reasoning_summary="r",
             )
@@ -253,3 +255,47 @@ class TestReportIO:
         assert isinstance(r, ProblemResult)
         assert r.expected == "18.02 g/mol"
         assert r.level == "gcse"
+
+
+class StructuredStub:
+    """Returns one fixed answer with structured value/units for every prompt."""
+
+    def __init__(self, text, value, units):
+        self.text, self.value, self.units = text, value, units
+
+    def solve(self, prompt, level_hint=None):
+        return outcome_for(self.text, value=self.value, units=self.units)
+
+
+def one_problem(expected="0.17 M"):
+    return [
+        ProblemState(
+            prompt="mix two solutions?",
+            params={},
+            expected=expected,
+            level="gcse",
+            topic="solutions",
+        )
+    ]
+
+
+class TestStructuredScoring:
+    def test_structured_value_rescues_unparseable_text(self):
+        stub = StructuredStub("about point one seven molar", 0.17, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem())
+        assert report.n_correct == 1
+
+    def test_wrong_structured_value_still_fails(self):
+        stub = StructuredStub("about point two molar", 0.20, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem())
+        assert report.n_correct == 0
+
+    def test_unitless_structured_value(self):
+        stub = StructuredStub("the pH is roughly 4.74", 4.74, "")
+        report = run_benchmark(lambda: stub, problems=one_problem("pH = 4.74"))
+        assert report.n_correct == 1
+
+    def test_report_keeps_the_formatted_text(self):
+        stub = StructuredStub("about point one seven molar", 0.17, "M")
+        report = run_benchmark(lambda: stub, problems=one_problem())
+        assert report.results[0].got == "about point one seven molar"
